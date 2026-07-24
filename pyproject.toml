@@ -1,0 +1,67 @@
+# pyproject.toml — hermes-plugin-gotify-notify
+# Standalone Gotify notification plugin for Hermes Agent.
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-plugin-gotify-notify"
+version = "1.0.0"
+description = "Gotify notification plugin for Hermes Agent — sends markdown-rendered push notifications via Gotify"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "redoracle"},
+]
+keywords = ["hermes", "hermes-agent", "gotify", "notification", "plugin"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Hermes Agent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications",
+    "Topic :: System :: Monitoring",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9",
+    "pytest-cov>=4.0,<6",
+    "pytest-xdist>=3.0,<4",
+]
+
+[project.urls]
+Homepage = "https://github.com/redoracle/hermes-plugin-gotify-notify"
+Repository = "https://github.com/redoracle/hermes-plugin-gotify-notify"
+Issues = "https://github.com/redoracle/hermes-plugin-gotify-notify/issues"
+Changelog = "https://github.com/redoracle/hermes-plugin-gotify-notify/releases"
+
+# --- Hermes plugin entry point ----------------------------------------------
+
+[project.entry-points."hermes_agent.plugins"]
+gotify-notify = "gotify_notify"
+
+# --- Setuptools --------------------------------------------------------------
+
+[tool.setuptools]
+packages = ["gotify_notify"]
+
+[tool.setuptools.package-data]
+gotify_notify = ["plugin.yaml"]
+
+# --- Pytest ------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
