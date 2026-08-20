@@ -79,6 +79,25 @@ class AndroidCtlTests(unittest.TestCase):
         self.assertFalse(controller.verify_channel_postcondition(app, "normal"))
         controller.ui.failure_artifacts.assert_called_once()
 
+    def test_only_drifted_repair_does_not_reopen_sound_picker_for_vibration_only(self):
+        controller = MODULE.Controller.__new__(MODULE.Controller)
+        controller.settings = types.SimpleNamespace(dry_run=False, ui_mode="auto", oem_profile="pixel", strict=True, non_interactive=True,
+                                                    ui_retries=1, ui_wait=0.0, package="com.github.gotify")
+        controller.apps = [MODULE.AppSpec(key="pager", name="PAGER", app_id=5, channels={"normal": MODULE.ChannelPolicy(sound="pager.ogg", vibration=False, importance=3)})]
+        controller.resolve_app_ids = lambda allow_seed: None
+        controller.audit_channels = lambda fail_on_drift=False: [MODULE.AuditEntry(app="PAGER", app_key="pager", app_id=5, channel="normal", channel_id="x", exists=True,
+            desired_sound="pager.ogg", actual_sound="pager.ogg", desired_vibration=False, actual_vibration=True,
+            desired_importance=3, actual_importance=3, drift=["vibration:True->False"])]
+        controller.wait_for_channel = lambda _cid: True
+        controller.channel_id = lambda _app, _cls: "x"
+        controller.console = types.SimpleNamespace(warning=lambda *a, **k: None, success=lambda *a, **k: None)
+        seen = []
+        controller.configure_channel_ui = lambda _app, _cls, policy: seen.append(policy) or True
+        controller.verify_channel_postcondition = lambda *_args: True
+        controller.configure_channels(classes=["normal"], only_drifted=True)
+        self.assertEqual(seen[0].sound, "keep")
+        self.assertFalse(seen[0].vibration)
+
     def test_screenshot_reads_png_as_binary_once(self):
         adb = AdbHarness()
         with tempfile.TemporaryDirectory() as tmp:
@@ -107,6 +126,13 @@ class AndroidCtlTests(unittest.TestCase):
         self.assertTrue(adb.launch_package("com.github.gotify"))
         self.assertIn("resolve-activity", adb.calls[0][0])
         self.assertEqual(adb.calls[1][0][:3], ["am", "start", "-W"])
+
+    def test_keyguard_showing_parses_platform_policy(self):
+        adb = AdbHarness()
+        adb.responses = [subprocess.CompletedProcess([], 0, "KeyguardServiceDelegate\n  showing=true\n", "")]
+        self.assertTrue(adb.keyguard_showing())
+        adb.responses = [subprocess.CompletedProcess([], 0, "KeyguardServiceDelegate\n  showing=false\n", "")]
+        self.assertFalse(adb.keyguard_showing())
 
     def test_open_channel_settings_resets_stale_settings_task(self):
         adb = AdbHarness()

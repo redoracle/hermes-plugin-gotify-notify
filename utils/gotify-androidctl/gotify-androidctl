@@ -559,6 +559,20 @@ class ADB:
         m2 = re.search(r"\bversionCode=(\d+)", text)
         return (m1.group(1) if m1 else "", m2.group(1) if m2 else "")
 
+    def keyguard_showing(self) -> Optional[bool]:
+        """Best-effort lock-state check; unknown is intentionally non-blocking.
+
+        Android/OEM policy dumps differ, so callers only refuse automation when
+        the platform positively reports a visible keyguard.  This avoids
+        attempting Settings taps on a lock screen without assuming one OEM UI.
+        """
+        cp = self.shell(["dumpsys", "window", "policy"], check=False)
+        text = cp.stdout or ""
+        match = re.search(r"KeyguardServiceDelegate\s+showing=(true|false)", text)
+        if not match:
+            match = re.search(r"(?:mShowingLockscreen|isStatusBarKeyguard)=(true|false)", text)
+        return (match.group(1) == "true") if match else None
+
     def wake(self) -> None:
         self.shell(["input", "keyevent", "KEYCODE_WAKEUP"], check=False, mutating=True)
         self.shell(["wm", "dismiss-keyguard"], check=False, mutating=True)
@@ -602,6 +616,11 @@ class ADB:
         return self.shell(args, check=False, mutating=True).returncode == 0
 
     def open_channel_settings(self, package: str, channel_id: str) -> bool:
+        # Pixel Settings may retain a previous CHANNEL_ID in SubSettings even
+        # when Activity Manager accepts the new intent.  Resetting only the
+        # Settings task is reversible and prevents stale-page configuration;
+        # the controller still performs a semantic title preflight afterwards.
+        self.shell(["am", "force-stop", "com.android.settings"], check=False, mutating=True)
         args = ["am", "start"] + self.user_args() + [
             "-a", "android.settings.CHANNEL_NOTIFICATION_SETTINGS",
             "--es", "android.provider.extra.APP_PACKAGE", package,
@@ -1197,6 +1216,28 @@ class UIAutomator:
             return None
 
         return walk(root, [])
+
+    def has_visible_text(self, regex: str) -> bool:
+        """Return true only when the current UI dump proves an expected label.
+
+        Android Settings may reuse a prior ``SubSettings`` intent.  A successful
+        ``am start`` is therefore insufficient evidence that the requested
+        notification channel is actually on screen.  This method intentionally
+        performs no interaction: callers must fail closed before the first tap.
+        """
+        path = self.dump()
+        if not path:
+            return False
+        try:
+            root = ET.parse(str(path)).getroot()
+        except Exception:
+            return False
+        rx = re.compile(regex, re.IGNORECASE)
+        for node in root.iter():
+            text = " ".join(filter(None, [node.attrib.get("text", ""), node.attrib.get("content-desc", "")])).strip()
+            if text and rx.search(text):
+                return True
+        return False
 
     def tap_node(self, node: Mapping[str, Any]) -> bool:
         cp = self.adb.shell(["input", "tap", str(node["x"]), str(node["y"])], check=False, mutating=True)
@@ -2642,12 +2683,40 @@ class Controller:
             "back": r"^(Navigate up|Back|Indietro)$",
         }
 
+    @staticmethod
+    def _channel_title_regex(cls: str) -> str:
+        """Semantic Settings titles for the four Gotify priority channels.
+
+        The English expressions cover AOSP/Pixel.  The Italian alternatives
+        keep guided/auto protection usable on the operator's configured locale.
+        Known manufacturer families are detected for diagnostics; unknown OEM wording deliberately fails closed and falls back to guided
+        configuration rather than guessing a screen coordinate.
+        """
+        patterns = {
+            "min": r"^(Minimum|Minim[ao]|Priorit.{0,16}minim).*(0|priority)",
+            "low": r"^(Low|Bass[ao]|Priorit.{0,16}bass).*(1.?3|priority)",
+            "normal": r"^(Normal|Priorit.{0,16}normal).*(4.?7|priority)",
+            "high": r"^(High|Alt[ao]|Priorit.{0,16}alt).*(> ?7|priority)",
+        }
+        return patterns.get(cls, r"$^")
+
+    def preflight_channel_page(self, cls: str) -> bool:
+        return self.ui.has_visible_text(self._channel_title_regex(cls))
+
     def _sound_regex(self, filename: str) -> str:
         stem = pathlib.Path(filename).stem
         options = [re.escape(filename), re.escape(stem)]
         return r"^(?:" + "|".join(options) + r")$"
 
     def configure_channel_ui(self, app: AppSpec, cls: str, policy: ChannelPolicy) -> bool:
+        lock_probe = getattr(self.adb, "keyguard_showing", lambda: None)
+        locked = lock_probe()
+        if locked is True:
+            self.console.warning(
+                f"Device is locked; refusing {app.name}/{cls} UI automation. Unlock it, then rerun or use guided/manual Settings.",
+                component="configure",
+            )
+            return False
         cid = self.channel_id(app, cls)
         if not cid:
             self.console.warning(f"Cannot configure {app.name}/{cls}: application ID unknown.", component="configure")
@@ -2656,6 +2725,13 @@ class Controller:
             self.console.warning(f"Could not open Android channel settings for {app.name}/{cls}.", component="configure")
             return False
         time.sleep(self.settings.ui_wait)
+        if not self.preflight_channel_page(cls):
+            self.console.warning(
+                f"Settings did not prove the requested {app.name}/{cls} channel before interaction; refusing UI taps.",
+                component="configure",
+            )
+            self.ui.failure_artifacts(f"{app.key}-{cls}-preflight")
+            return False
         labels = self.ui_labels()
         ok = True
         silent_mode = False
@@ -2711,6 +2787,23 @@ class Controller:
             self.ui.failure_artifacts(f"{app.key}-{cls}")
         return ok
 
+    def verify_channel_postcondition(self, app: AppSpec, cls: str) -> bool:
+        """Validate the exact requested channel from dumpsys after UI changes."""
+        cid = self.channel_id(app, cls)
+        if not cid:
+            return False
+        matching = [e for e in self.audit_channels(fail_on_drift=False) if e.app_key == app.key and e.channel == cls]
+        entry = matching[0] if matching else None
+        if entry and not entry.drift:
+            return True
+        detail = ", ".join(entry.drift) if entry else "audit entry missing"
+        self.console.warning(
+            f"Post-condition failed for {app.name}/{cls}: {detail}. Manual/guided handling required.",
+            component="configure",
+        )
+        self.ui.failure_artifacts(f"{app.key}-{cls}-postcondition")
+        return False
+
     def _ui_set_silent(self, labels: Mapping[str, str]) -> bool:
         # Prefer a top-level Silent radio option.
         node = self.ui.find(labels["silent"])
@@ -2765,21 +2858,48 @@ class Controller:
                     )
             return
         self.resolve_app_ids(allow_seed=True)
-        drift_set: set[Tuple[str, str]] = set()
+        drift_entries: Dict[Tuple[str, str], AuditEntry] = {}
         if only_drifted:
             for e in self.audit_channels(fail_on_drift=False):
                 if e.drift:
-                    drift_set.add((e.app_key, e.channel))
+                    drift_entries[(e.app_key, e.channel)] = e
         if self.settings.ui_mode == "off":
             raise ToolError("configure requires --ui auto or --ui guided; Android does not expose a supported API to rewrite channel behavior directly.", ExitCode.UI)
+        if self.settings.oem_profile == "auto":
+            self.console.warning(
+                "OEM/UI profile is auto-detected. Unrecognised channel titles or controls will receive no taps and require guided/manual completion.",
+                component="configure",
+            )
 
         for app in self.apps:
             for cls in classes:
                 if cls not in app.channels:
                     continue
-                if only_drifted and (app.key, cls) not in drift_set:
+                entry = drift_entries.get((app.key, cls))
+                if only_drifted and not entry:
                     continue
                 policy = app.channels[cls]
+                # Do not reopen a picker that already matches: Pixel/OEM UI can
+                # change page hierarchy after a picker round-trip.  Repair only
+                # the dimensions proven to be drifted, then audit the complete
+                # desired policy as the post-condition.
+                if entry:
+                    sound_drift = any(item.startswith("sound:") for item in entry.drift)
+                    vibration_drift = any(item.startswith("vibration:") for item in entry.drift)
+                    unsupported = [item for item in entry.drift if not item.startswith(("sound:", "vibration:"))]
+                    if unsupported:
+                        self.console.warning(
+                            f"{app.name}/{cls} has unsupported automatic repair drift: {', '.join(unsupported)}; use guided/manual Settings.",
+                            component="configure",
+                        )
+                        if self.settings.strict:
+                            raise ToolError(f"Unsupported automatic channel repair for {app.name}/{cls}.", ExitCode.UI)
+                        continue
+                    policy = ChannelPolicy(
+                        sound=policy.sound if sound_drift else "keep",
+                        vibration=policy.vibration if vibration_drift else None,
+                        importance=policy.importance,
+                    )
                 cid = self.channel_id(app, cls)
                 if cid and not self.wait_for_channel(cid):
                     self.console.warning(f"Channel not present after wait: {app.name}/{cls} ({cid})", component="configure")
@@ -2800,7 +2920,7 @@ class Controller:
                         break
                     self.console.warning(f"UI configure attempt {attempt}/{self.settings.ui_retries} failed for {app.name}/{cls}", component="configure")
                     time.sleep(self.settings.ui_wait)
-                if success:
+                if success and self.verify_channel_postcondition(app, cls):
                     self.console.success(f"Configured {app.name}/{cls}", component="configure", item=f"{app.key}:{cls}")
                 elif self.settings.non_interactive:
                     msg = f"Could not configure {app.name}/{cls} automatically."

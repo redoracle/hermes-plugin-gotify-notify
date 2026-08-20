@@ -437,9 +437,11 @@ The sound identifies the domain; the priority/channel class identifies urgency.
 - One-time Gotify tokens have an emergency `0600` recovery path if durable secret persistence fails.
 - Normal logs/reports never include raw Application tokens.
 
-## Android limitation
+## Android and OEM limitation
 
 On Android 8+ a notification channel's sound/importance behavior becomes user-controlled after creation. A normal third-party process cannot reliably rewrite those settings with a supported stock API. `gotify-androidctl` therefore uses official Settings intents plus semantic UI automation, with a guided fallback instead of private database edits or blind fixed-coordinate taps.
+
+The tool detects Pixel/AOSP, Samsung, Xiaomi/Redmi/POCO, OnePlus, Oppo/Realme and Motorola for diagnostics, but it does **not** assume their Settings hierarchies are interchangeable. Before an automatic edit it verifies the requested priority-channel title, and afterwards it audits `dumpsys notification`. Unknown labels, a visible lock screen, an unavailable control, or post-condition drift stop automatic work without tapping further. Unlock the phone and retry, or use `--ui guided`/Android Settings manually; treat UI automation as an operator aid, not an unattended production control plane.
 
 ## Upstream references
 

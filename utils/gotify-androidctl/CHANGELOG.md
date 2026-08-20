@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.1.3-local — 2026-08-20
+
+### Cross-OEM safety and drift repair
+
+- Automatic channel edits now refuse to start when Android positively reports a visible lock screen; the operator must unlock the device or use guided/manual Settings.
+
+- The Android UI path is now explicitly fail-closed across OEMs: Pixel/AOSP, Samsung, Xiaomi/Redmi/POCO, OnePlus, Oppo/Realme and Motorola are detected for diagnostics, while unrecognised channel titles or controls receive no tap and require guided/manual completion.
+- Added drift-only repair: when an audit proves only vibration drift, the tool preserves the already-verified custom sound and changes only vibration.
+- Added an entrypoint consistency invariant to the self-test so the executable and Python source cannot silently diverge again.
+- Android Settings is force-stopped before each channel deep link to avoid stale Settings task/page reuse seen on Pixel.
+- The final authority remains the post-change `dumpsys notification` audit; ADB/UI success alone is insufficient.
+
+
 ## 4.1.1-local — 2026-08-20
 
 ### Android UI safety

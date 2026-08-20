@@ -5,6 +5,7 @@ CLI="${GOTIFY_ANDROIDCTL:-$ROOT/gotify-androidctl}"
 MOCK="$ROOT/tests/mock_gotify_server.py"
 command -v python3 >/dev/null || { echo 'python3 required' >&2; exit 10; }
 command -v curl >/dev/null || { echo 'curl required' >&2; exit 10; }
+cmp -s "$ROOT/gotify-androidctl" "$ROOT/gotify-androidctl.py" || { echo "entrypoints drift: synchronize gotify-androidctl from gotify-androidctl.py" >&2; exit 10; }
 python3 -m py_compile "$ROOT/gotify-androidctl.py"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/gotify-androidctl-selftest.XXXXXX")"
 cleanup(){ [[ -n "${SERVER_PID:-}" ]] && kill "$SERVER_PID" 2>/dev/null || true; rm -rf "$TMP"; }

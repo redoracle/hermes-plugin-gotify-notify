@@ -559,6 +559,20 @@ class ADB:
         m2 = re.search(r"\bversionCode=(\d+)", text)
         return (m1.group(1) if m1 else "", m2.group(1) if m2 else "")
 
+    def keyguard_showing(self) -> Optional[bool]:
+        """Best-effort lock-state check; unknown is intentionally non-blocking.
+
+        Android/OEM policy dumps differ, so callers only refuse automation when
+        the platform positively reports a visible keyguard.  This avoids
+        attempting Settings taps on a lock screen without assuming one OEM UI.
+        """
+        cp = self.shell(["dumpsys", "window", "policy"], check=False)
+        text = cp.stdout or ""
+        match = re.search(r"KeyguardServiceDelegate\s+showing=(true|false)", text)
+        if not match:
+            match = re.search(r"(?:mShowingLockscreen|isStatusBarKeyguard)=(true|false)", text)
+        return (match.group(1) == "true") if match else None
+
     def wake(self) -> None:
         self.shell(["input", "keyevent", "KEYCODE_WAKEUP"], check=False, mutating=True)
         self.shell(["wm", "dismiss-keyguard"], check=False, mutating=True)
@@ -2675,7 +2689,7 @@ class Controller:
 
         The English expressions cover AOSP/Pixel.  The Italian alternatives
         keep guided/auto protection usable on the operator's configured locale.
-        Unknown OEM wording deliberately fails closed and falls back to guided
+        Known manufacturer families are detected for diagnostics; unknown OEM wording deliberately fails closed and falls back to guided
         configuration rather than guessing a screen coordinate.
         """
         patterns = {
@@ -2695,6 +2709,14 @@ class Controller:
         return r"^(?:" + "|".join(options) + r")$"
 
     def configure_channel_ui(self, app: AppSpec, cls: str, policy: ChannelPolicy) -> bool:
+        lock_probe = getattr(self.adb, "keyguard_showing", lambda: None)
+        locked = lock_probe()
+        if locked is True:
+            self.console.warning(
+                f"Device is locked; refusing {app.name}/{cls} UI automation. Unlock it, then rerun or use guided/manual Settings.",
+                component="configure",
+            )
+            return False
         cid = self.channel_id(app, cls)
         if not cid:
             self.console.warning(f"Cannot configure {app.name}/{cls}: application ID unknown.", component="configure")
@@ -2836,21 +2858,48 @@ class Controller:
                     )
             return
         self.resolve_app_ids(allow_seed=True)
-        drift_set: set[Tuple[str, str]] = set()
+        drift_entries: Dict[Tuple[str, str], AuditEntry] = {}
         if only_drifted:
             for e in self.audit_channels(fail_on_drift=False):
                 if e.drift:
-                    drift_set.add((e.app_key, e.channel))
+                    drift_entries[(e.app_key, e.channel)] = e
         if self.settings.ui_mode == "off":
             raise ToolError("configure requires --ui auto or --ui guided; Android does not expose a supported API to rewrite channel behavior directly.", ExitCode.UI)
+        if self.settings.oem_profile == "auto":
+            self.console.warning(
+                "OEM/UI profile is auto-detected. Unrecognised channel titles or controls will receive no taps and require guided/manual completion.",
+                component="configure",
+            )
 
         for app in self.apps:
             for cls in classes:
                 if cls not in app.channels:
                     continue
-                if only_drifted and (app.key, cls) not in drift_set:
+                entry = drift_entries.get((app.key, cls))
+                if only_drifted and not entry:
                     continue
                 policy = app.channels[cls]
+                # Do not reopen a picker that already matches: Pixel/OEM UI can
+                # change page hierarchy after a picker round-trip.  Repair only
+                # the dimensions proven to be drifted, then audit the complete
+                # desired policy as the post-condition.
+                if entry:
+                    sound_drift = any(item.startswith("sound:") for item in entry.drift)
+                    vibration_drift = any(item.startswith("vibration:") for item in entry.drift)
+                    unsupported = [item for item in entry.drift if not item.startswith(("sound:", "vibration:"))]
+                    if unsupported:
+                        self.console.warning(
+                            f"{app.name}/{cls} has unsupported automatic repair drift: {', '.join(unsupported)}; use guided/manual Settings.",
+                            component="configure",
+                        )
+                        if self.settings.strict:
+                            raise ToolError(f"Unsupported automatic channel repair for {app.name}/{cls}.", ExitCode.UI)
+                        continue
+                    policy = ChannelPolicy(
+                        sound=policy.sound if sound_drift else "keep",
+                        vibration=policy.vibration if vibration_drift else None,
+                        importance=policy.importance,
+                    )
                 cid = self.channel_id(app, cls)
                 if cid and not self.wait_for_channel(cid):
                     self.console.warning(f"Channel not present after wait: {app.name}/{cls} ({cid})", component="configure")
