@@ -10,7 +10,7 @@ A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that sends
 
 ## Features
 
-- **Markdown rendering** — messages include `extras.client::display.contentType: text/markdown` so the Gotify client renders **bold**, *italic*, `code`, [links](https://gotify.net), lists, and headings natively.
+- **Markdown rendering** — messages include `extras.client::display.contentType: text/markdown` so the Gotify client renders **bold**, _italic_, `code`, [links](https://gotify.net), lists, and headings natively.
 - **Configurable content type** — set `GOTIFY_CONTENT_TYPE=text/plain` to disable markdown.
 - **Zero external dependencies** — uses only Python stdlib (`urllib.request`).
 - **Configurable timeout** — `GOTIFY_TIMEOUT` env var (1–60 seconds, default: 10).
@@ -78,22 +78,77 @@ You can also trigger it manually:
 3. Copy the **Application Token**.
 4. Set it as `GOTIFY_APP_TOKEN` in `~/.hermes/.env`.
 
+## Android provisioning utility
+
+[`utils/gotify-androidctl`](utils/gotify-androidctl/) is an optional companion utility for operating the Gotify Android client alongside this plugin. It provisions the category Applications used by the plugin, uploads their images, deploys category sounds to Android, configures notification channels, and audits configuration drift.
+
+The plugin is the versioned deliverable (`pyproject.toml` is the source of truth). `gotify-androidctl` has no independent release version; its reports identify the utility by name only.
+
+### Typical use cases
+
+- Bootstrap a new Gotify server and Android device with the PAGER, SECURITY, INFRA, PLATFORM, AUTOMATION, DEV, DIGEST, MONEY IN/OUT, and TRADING categories.
+- Synchronize the icons in [`utils/icons`](utils/icons/) to their corresponding Gotify Applications.
+- Convert and deploy category sounds from [`utils/sounds`](utils/sounds/) to the connected Android device.
+- Create, inspect, configure, and audit the Gotify Android notification channels for each category.
+- Perform an explicit, confirmed Gotify Application-token rotation.
+
+### Usage
+
+Run commands from the repository root. The generated configuration resolves `assets.root: ".."` relative to its own location, so it continues to point at `./utils` regardless of the process working directory.
+
+```bash
+# Create a configuration without putting secrets in JSON. In a terminal this
+# starts a wizard for the Gotify URL and environment-variable names.
+./utils/gotify-androidctl/gotify-androidctl setup \
+  --output ./utils/gotify-androidctl/gotify-android.json
+
+# Edit the Gotify URL and credential environment-variable names, then verify paths and prerequisites.
+./utils/gotify-androidctl/gotify-androidctl \
+  -c ./utils/gotify-androidctl/gotify-android.json show-config
+./utils/gotify-androidctl/gotify-androidctl \
+  -c ./utils/gotify-androidctl/gotify-android.json doctor
+
+# Preview the complete mutation plan, then provision apps, images, sounds, and channels.
+./utils/gotify-androidctl/gotify-androidctl \
+  -c ./utils/gotify-androidctl/gotify-android.json --dry-run bootstrap
+./utils/gotify-androidctl/gotify-androidctl \
+  -c ./utils/gotify-androidctl/gotify-android.json bootstrap --require-icons
+
+# Reconcile only icons, then audit Android/Gotify drift in CI or scheduled jobs.
+./utils/gotify-androidctl/gotify-androidctl \
+  -c ./utils/gotify-androidctl/gotify-android.json icons
+./utils/gotify-androidctl/gotify-androidctl \
+  -c ./utils/gotify-androidctl/gotify-android.json --non-interactive --strict audit --fail-on-drift
+```
+
+If an interactive command references a missing `-c` file, the utility starts the same setup wizard, writes the configuration, and exits without provisioning. In CI or another non-interactive environment it exits with a safe, copyable `setup --non-interactive --gotify-url ...` command instead.
+
+### Constraints and safety
+
+- Requires `adb`, `curl`, and a connected Android device with USB or wireless debugging enabled. `ffmpeg` is required only when conversion to the selected audio format is needed. OGG deployment requires an FFmpeg Vorbis encoder (`libvorbis` or native `vorbis`); verify with `ffmpeg -hide_banner -encoders | rg 'libvorbis| vorbis'`.
+- Gotify Application provisioning and token rotation require Gotify management credentials; rotate tokens only with `--confirm-token-rotation`.
+- Android 8+ channel sound and importance settings become user-controlled after channel creation. The utility uses supported Settings intents and semantic UI automation, then falls back to guided mode rather than changing private Android databases.
+- Icon and sound configuration values are filename-only and cannot escape the configured `./utils/icons` and `./utils/sounds` directories. Audio sources are never overwritten, ADB uploads are hash-verified by default, and normal reports redact tokens.
+- The full local self-test exercises WAV-to-OGG conversion. Install FFmpeg with a Vorbis encoder before running it; the utility prefers `libvorbis` and automatically falls back to native `vorbis` (with stereo conversion) when available.
+
+See the [gotify-androidctl guide](utils/gotify-androidctl/README.md) for the complete command and configuration reference.
+
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GOTIFY_URL` | Yes | — | Gotify server base URL |
-| `GOTIFY_APP_TOKEN` | Yes | — | Application token from Gotify |
-| `GOTIFY_CONTENT_TYPE` | No | `text/markdown` | Content-Type for message rendering (`text/markdown` or `text/plain`) |
-| `GOTIFY_TIMEOUT` | No | `10` | Request timeout in seconds (1–60) |
+| Variable              | Required | Default         | Description                                                          |
+| --------------------- | -------- | --------------- | -------------------------------------------------------------------- |
+| `GOTIFY_URL`          | Yes      | —               | Gotify server base URL                                               |
+| `GOTIFY_APP_TOKEN`    | Yes      | —               | Application token from Gotify                                        |
+| `GOTIFY_CONTENT_TYPE` | No       | `text/markdown` | Content-Type for message rendering (`text/markdown` or `text/plain`) |
+| `GOTIFY_TIMEOUT`      | No       | `10`            | Request timeout in seconds (1–60)                                    |
 
 ## Tool Schema
 
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `message` | string | Yes | — | Notification body (markdown, max 4000 chars) |
-| `title` | string | No | `Hermes` | Notification title (max 120 chars) |
-| `priority` | integer | No | `5` | Gotify priority (1–10; 2=info, 5=important, 8=urgent, 10=critical) |
+| Parameter  | Type    | Required | Default  | Description                                                        |
+| ---------- | ------- | -------- | -------- | ------------------------------------------------------------------ |
+| `message`  | string  | Yes      | —        | Notification body (markdown, max 4000 chars)                       |
+| `title`    | string  | No       | `Hermes` | Notification title (max 120 chars)                                 |
+| `priority` | integer | No       | `5`      | Gotify priority (1–10; 2=info, 5=important, 8=urgent, 10=critical) |
 
 ## How It Works
 

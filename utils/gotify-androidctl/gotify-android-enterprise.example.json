@@ -1,0 +1,393 @@
+{
+  "version": 1,
+  "gotify": {
+    "url": "https://gotify.example.com",
+    "client_token_env": "GOTIFY_CLIENT_TOKEN",
+    "username": null,
+    "password_env": "GOTIFY_PASSWORD",
+    "password_file": null,
+    "secret_dir": "~/.config/gotify-androidctl/secrets",
+    "provisioning_output": null
+  },
+  "android": {
+    "package": "com.github.gotify",
+    "user": 0,
+    "remote_sounds_dir": "/sdcard/Notifications/Gotify",
+    "wake_device": true,
+    "keep_awake": true,
+    "grant_notifications": true,
+    "battery_whitelist": false,
+    "media_scan": "broadcast",
+    "verify_hash": true
+  },
+  "assets": {
+    "root": "..",
+    "icons_dir": "icons",
+    "sounds_dir": "sounds",
+    "audio": {
+      "format": "ogg",
+      "source_preference": [
+        "wav",
+        "ogg",
+        "mp3"
+      ],
+      "cache_dir": "~/.cache/gotify-androidctl/audio",
+      "ffmpeg": "ffmpeg",
+      "vorbis_quality": 5.0
+    }
+  },
+  "state_file": "~/.config/gotify-androidctl/state.json",
+  "http": {
+    "curl": "curl",
+    "insecure": false,
+    "connect_timeout": 5,
+    "request_timeout": 20,
+    "retries": 2,
+    "retry_delay": 1,
+    "headers": [],
+    "header_envs": []
+  },
+  "ui": {
+    "mode": "auto",
+    "wait": 1.0,
+    "retries": 2,
+    "scrolls": 8,
+    "locale": "auto",
+    "oem_profile": "auto",
+    "screenshot_on_failure": true,
+    "dump_ui_on_failure": true,
+    "guided_timeout": 0,
+    "ensure_separate_channels": "auto"
+  },
+  "policy": {
+    "seed_priority": 2,
+    "seed_all_priorities": false,
+    "seed_wait": 1.0,
+    "channel_wait": 12.0,
+    "seed_title_prefix": "[BOOTSTRAP]",
+    "seed_message": "Temporary provisioning message used to materialize/verify Gotify Android notification channels.",
+    "cleanup_seeds": false
+  },
+  "apps": [
+    {
+      "id": "pager",
+      "name": "🚨 PAGER",
+      "enabled": true,
+      "description": "Critical paging and escalation events",
+      "default_priority": 8,
+      "token_env": "TOKEN_PAGER",
+      "icon": "pager.png",
+      "sound": "pager.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "pager.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "pager.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "security",
+      "name": "🛡 SECURITY",
+      "enabled": true,
+      "description": "Authentication, firewall, access and security events",
+      "default_priority": 2,
+      "token_env": "TOKEN_SECURITY",
+      "icon": "security.png",
+      "sound": "security.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "security.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "security.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "infra",
+      "name": "🧱 INFRA",
+      "enabled": true,
+      "description": "Hosts, network, storage, filesystem and hardware events",
+      "default_priority": 2,
+      "token_env": "TOKEN_INFRA",
+      "icon": "infra.png",
+      "sound": "infra.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "infra.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "infra.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "platform",
+      "name": "🐳 PLATFORM",
+      "enabled": true,
+      "description": "Containers, system services, proxies and application platform events",
+      "default_priority": 2,
+      "token_env": "TOKEN_PLATFORM",
+      "icon": "platform.png",
+      "sound": "platform.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "platform.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "platform.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "automation",
+      "name": "⚙ AUTOMATION",
+      "enabled": true,
+      "description": "Cron, workflow, job and orchestration events",
+      "default_priority": 2,
+      "token_env": "TOKEN_AUTOMATION",
+      "icon": "automation.png",
+      "sound": "automation.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "automation.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "automation.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "dev",
+      "name": "🧪 DEV",
+      "enabled": true,
+      "description": "Development tooling, builds, tests and interactive engineering events",
+      "default_priority": 2,
+      "token_env": "TOKEN_DEV",
+      "icon": "dev.png",
+      "sound": "dev.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "dev.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "dev.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "digest",
+      "name": "📊 DIGEST",
+      "enabled": true,
+      "description": "Reports, summaries, housekeeping and low-noise operational digests",
+      "default_priority": 0,
+      "token_env": "TOKEN_DIGEST",
+      "icon": "digest.png",
+      "sound": "silent",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "money_in",
+      "name": "💰 MONEY · IN",
+      "enabled": true,
+      "description": "External incoming financial movements and credits",
+      "default_priority": 5,
+      "token_env": "TOKEN_MONEY_IN",
+      "icon": "money_in.png",
+      "sound": "cash-in.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "cash-in.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "cash-in.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "money_out",
+      "name": "💸 MONEY · OUT",
+      "enabled": true,
+      "description": "External outgoing financial movements, debits and payments",
+      "default_priority": 5,
+      "token_env": "TOKEN_MONEY_OUT",
+      "icon": "money_out.png",
+      "sound": "cash-out.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "cash-out.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "cash-out.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    },
+    {
+      "id": "trading",
+      "name": "📈 TRADING",
+      "enabled": true,
+      "description": "Trading order, execution, position and market-operation events",
+      "default_priority": 2,
+      "token_env": "TOKEN_TRADING",
+      "icon": "trading.png",
+      "sound": "trading.ogg",
+      "channels": {
+        "min": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 1
+        },
+        "low": {
+          "sound": "silent",
+          "vibration": false,
+          "importance": 2
+        },
+        "normal": {
+          "sound": "trading.ogg",
+          "vibration": false,
+          "importance": 3
+        },
+        "high": {
+          "sound": "trading.ogg",
+          "vibration": true,
+          "importance": 4
+        }
+      }
+    }
+  ]
+}
