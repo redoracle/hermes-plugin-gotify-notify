@@ -4,6 +4,12 @@
 
 ### Cross-OEM safety and drift repair
 
+- Disabled Settings controls are now rejected before tap; Silent selection falls back to the active Sound picker rather than treating a disabled top-level choice as success.
+
+- Fixed Pixel switch discovery: a label can be a sibling of the actual Switch, so the automation now searches the verified preference-row subtree rather than only the label subtree.
+
+- Settings discovery now prefers the semantic checkable Switch child over a clickable parent row when the platform exposes state only on that child; this fixes the current Pixel vibration-control hierarchy without fixed coordinates.
+
 - Automatic channel edits now refuse to start when Android positively reports a visible lock screen; the operator must unlock the device or use guided/manual Settings.
 
 - The Android UI path is now explicitly fail-closed across OEMs: Pixel/AOSP, Samsung, Xiaomi/Redmi/POCO, OnePlus, Oppo/Realme and Motorola are detected for diagnostics, while unrecognised channel titles or controls receive no tap and require guided/manual completion.

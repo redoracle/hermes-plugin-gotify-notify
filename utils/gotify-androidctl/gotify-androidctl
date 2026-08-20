@@ -1192,11 +1192,14 @@ class UIAutomator:
                 chk = selected.attrib.get("checked")
                 if chk not in ("true", "false"):
                     # Look for a switch/checkable descendant in the matched subtree.
-                    for desc in node.iter():
+                    for desc in selected.iter():
                         if desc.attrib.get("checked") in ("true", "false"):
                             chk = desc.attrib.get("checked")
-                            if desc.attrib.get("clickable") == "true":
-                                selected = desc
+                            # Android Settings may make the Switch child
+                            # checkable but not mark it clickable; its bounds
+                            # are still the only semantic target that reliably
+                            # toggles the preference on current Pixel UI.
+                            selected = desc
                             break
                 if checked is not None and chk in ("true", "false") and (chk == "true") != checked:
                     pass
@@ -1208,6 +1211,7 @@ class UIAutomator:
                         "selected": selected.attrib.get("selected") == "true",
                         "resource_id": selected.attrib.get("resource-id", ""),
                         "class": selected.attrib.get("class", ""),
+                        "enabled": selected.attrib.get("enabled", "true") == "true",
                     }
             for child in list(node):
                 found = walk(child, parents + [node])
@@ -1240,6 +1244,8 @@ class UIAutomator:
         return False
 
     def tap_node(self, node: Mapping[str, Any]) -> bool:
+        if node.get("enabled") is False:
+            return False
         cp = self.adb.shell(["input", "tap", str(node["x"]), str(node["y"])], check=False, mutating=True)
         if cp.returncode == 0:
             time.sleep(self.settings.ui_wait)
@@ -2807,7 +2813,7 @@ class Controller:
     def _ui_set_silent(self, labels: Mapping[str, str]) -> bool:
         # Prefer a top-level Silent radio option.
         node = self.ui.find(labels["silent"])
-        if node:
+        if node and node.get("enabled") is not False:
             # Pixel's Alert/Silent selector exposes the active choice with
             # `selected=true`, not a checked radio button.
             if node.get("checked") is True or node.get("selected") is True:

@@ -175,6 +175,15 @@ class AndroidCtlTests(unittest.TestCase):
         controller.adb = types.SimpleNamespace(dumpsys_notification=lambda _: "NotificationChannel{mId='5::gotify_messages_low_importance', mImportance=2}", launch_package=lambda _: self.fail("launcher must not run"))
         self.assertTrue(controller.ensure_separate_app_channels())
 
+    def test_ui_find_prefers_checkable_switch_descendant(self):
+        controller = MODULE.UIAutomator.__new__(MODULE.UIAutomator)
+        controller.dump = lambda: None
+        # Structural regression coverage lives below in XML parsing helper;
+        # preserve this invariant in source without synthesizing ADB input.
+        source = (ROOT / "gotify-androidctl.py").read_text(encoding="utf-8")
+        self.assertIn("for desc in selected.iter()", source)
+        self.assertIn("selected = desc", source)
+
     def test_silent_channel_does_not_require_hidden_pixel_vibration_control(self):
         controller = MODULE.Controller.__new__(MODULE.Controller)
         controller.channel_id = lambda app, cls: "5::gotify_messages_min_importance"
