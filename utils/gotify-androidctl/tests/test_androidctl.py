@@ -108,6 +108,12 @@ class AndroidCtlTests(unittest.TestCase):
         self.assertIn("resolve-activity", adb.calls[0][0])
         self.assertEqual(adb.calls[1][0][:3], ["am", "start", "-W"])
 
+    def test_open_channel_settings_resets_stale_settings_task(self):
+        adb = AdbHarness()
+        self.assertTrue(adb.open_channel_settings("com.github.gotify", "5::gotify_messages_default_importance"))
+        self.assertEqual(adb.calls[0][0], ["am", "force-stop", "com.android.settings"])
+        self.assertIn("android.settings.CHANNEL_NOTIFICATION_SETTINGS", adb.calls[1][0])
+
     def test_launch_package_refuses_unresolved_or_error_activity(self):
         adb = AdbHarness()
         adb.responses = [subprocess.CompletedProcess([], 0, "No activity found\n", "")]

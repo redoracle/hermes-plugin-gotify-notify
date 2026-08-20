@@ -602,6 +602,11 @@ class ADB:
         return self.shell(args, check=False, mutating=True).returncode == 0
 
     def open_channel_settings(self, package: str, channel_id: str) -> bool:
+        # Pixel Settings may retain a previous CHANNEL_ID in SubSettings even
+        # when Activity Manager accepts the new intent.  Resetting only the
+        # Settings task is reversible and prevents stale-page configuration;
+        # the controller still performs a semantic title preflight afterwards.
+        self.shell(["am", "force-stop", "com.android.settings"], check=False, mutating=True)
         args = ["am", "start"] + self.user_args() + [
             "-a", "android.settings.CHANNEL_NOTIFICATION_SETTINGS",
             "--es", "android.provider.extra.APP_PACKAGE", package,
