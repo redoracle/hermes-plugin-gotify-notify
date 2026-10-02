@@ -328,7 +328,8 @@ class TestHTTP:
 
         assert req.get_method() == "POST"
         assert "http://gotify.test/message" in req.full_url
-        assert "token=testtoken123" in req.full_url
+        assert "token" not in req.full_url
+        assert req.get_header("X-gotify-key") == "testtoken123"
 
     @patch("urllib.request.urlopen")
     def test_content_type_header(self, mock_urlopen, plugin, env_set):
@@ -340,15 +341,16 @@ class TestHTTP:
         assert req.headers["Content-type"] == "application/json; charset=utf-8"
 
     @patch("urllib.request.urlopen")
-    def test_token_url_encoded(self, mock_urlopen, plugin, env_set, monkeypatch):
-        """Token with special characters must be URL-encoded."""
+    def test_token_sent_verbatim_in_header(self, mock_urlopen, plugin, env_set, monkeypatch):
+        """Token with special characters is sent unchanged in the header."""
         monkeypatch.setenv("GOTIFY_APP_TOKEN", "tok+en&special=1")
         mock_urlopen.return_value = _mock_response()
 
         plugin.tools["gotify_send"]["handler"]({"message": "hi"})
         req = _captured_request(mock_urlopen)
 
-        assert "token=tok%2Ben%26special%3D1" in req.full_url
+        assert req.get_header("X-gotify-key") == "tok+en&special=1"
+        assert "tok" not in req.full_url
 
 
 # --------------------------------------------------------------------------- #

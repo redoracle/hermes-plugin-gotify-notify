@@ -36,7 +36,7 @@ Instead, email: **security@redoracle.dev** (if available) or send a private vuln
 ### Secrets handling
 
 - All credentials (`GOTIFY_APP_TOKEN`, `GOTIFY_URL`) are read from environment variables — never hardcoded, never logged.
-- The application token is URL-encoded via `urllib.parse.quote(token, safe='')` before being placed in the query string.
+- The application token is sent in the `X-Gotify-Key` request header, never in the URL, so it is not recorded by reverse-proxy access logs or URL-based tracing.
 
 ### Input validation
 
@@ -56,7 +56,7 @@ Instead, email: **security@redoracle.dev** (if available) or send a private vuln
 
 - All HTTP requests use a bounded timeout (default: 10 seconds, max: 60).
 - The plugin POSTs only to `{GOTIFY_URL}/message` — no other endpoints.
-- No user input is passed unsanitized to the URL. The token is URL-encoded; the base URL is stripped of trailing slashes.
+- No user input is passed unsanitized to the URL. The token is not part of the URL; the base URL is stripped of trailing slashes.
 
 ### What the plugin does NOT do
 

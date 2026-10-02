@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -82,17 +81,20 @@ def _send_request(
 ) -> dict[str, Any]:
     """POST *payload* to the Gotify server and return a result dict.
 
-    The token is sent as a query parameter (Gotify's documented auth
-    method). URL construction uses ``urllib.parse.quote`` with
-    ``safe=''`` to ensure the token is fully URL-encoded.
+    The token is sent in the ``X-Gotify-Key`` header, never in the URL, so it
+    does not end up in reverse-proxy access logs, browser history or tracing
+    spans that record the request URL.
     """
-    url = f"{base_url}/message?token={urllib.parse.quote(token, safe='')}"
+    url = f"{base_url}/message"
     data = json.dumps(payload).encode("utf-8")
 
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json; charset=utf-8"},
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "X-Gotify-Key": token,
+        },
         method="POST",
     )
 

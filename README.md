@@ -14,7 +14,7 @@ A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that sends
 - **Configurable content type** — set `GOTIFY_CONTENT_TYPE=text/plain` to disable markdown.
 - **Zero external dependencies** — uses only Python stdlib (`urllib.request`).
 - **Configurable timeout** — `GOTIFY_TIMEOUT` env var (1–60 seconds, default: 10).
-- **Input safety** — title truncated to 120 chars, message to 4000 chars, priority clamped to 1–10, token URL-encoded, content type validated against an allowlist.
+- **Input safety** — title truncated to 120 chars, message to 4000 chars, priority clamped to 1–10, token sent in a header (never in the URL), content type validated against an allowlist.
 - **Clean error handling** — missing env vars, HTTP errors, and connection failures all return structured JSON with `success: false` and an error message — no crashes.
 
 ## Installation
@@ -156,7 +156,7 @@ The plugin registers a `gotify_send` tool with the Hermes `PluginManager`. When 
 
 1. Reads `GOTIFY_URL` and `GOTIFY_APP_TOKEN` from the environment.
 2. Constructs a JSON payload with the message, title, priority, and `extras.client::display.contentType`.
-3. POSTs to `{GOTIFY_URL}/message?token={GOTIFY_APP_TOKEN}`.
+3. POSTs to `{GOTIFY_URL}/message` with the token in the `X-Gotify-Key` header.
 4. Returns a JSON result with `success`, `status`, and `response` (or `error`).
 
 The markdown rendering uses Gotify's [message extras](https://gotify.net/docs/msgextras#clientdisplay) — specifically the `client::display.contentType` field. This is a documented Gotify feature, not a hack.
@@ -164,7 +164,7 @@ The markdown rendering uses Gotify's [message extras](https://gotify.net/docs/ms
 ## Security
 
 - **No secrets in code** — all credentials are read from environment variables.
-- **Token URL-encoded** — the application token is fully URL-encoded via `urllib.parse.quote(token, safe='')`.
+- **Token never in the URL** — the application token is sent in the `X-Gotify-Key` header, so it does not end up in reverse-proxy access logs or tracing spans that record request URLs.
 - **Content type allowlist** — `GOTIFY_CONTENT_TYPE` is validated against `{"text/markdown", "text/plain"}`; invalid values fall back to the default.
 - **Timeout bounded** — `GOTIFY_TIMEOUT` is clamped to 1–60 seconds; invalid values fall back to 10.
 - **No logging of secrets** — the plugin never logs the token or URL.

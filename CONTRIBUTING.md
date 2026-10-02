@@ -73,7 +73,7 @@ All tests use mocked HTTP — no live Gotify server is needed. Never add tests t
 
 - **Never hardcode secrets** — tokens, URLs, and credentials must come from environment variables.
 - **Validate all inputs** — content types, timeouts, and priorities are validated and clamped.
-- **URL-encode the token** — always use `urllib.parse.quote(token, safe='')`.
+- **Keep the token out of the URL** — send it in the `X-Gotify-Key` header, never as a `?token=` query parameter.
 - **No logging of sensitive data** — the plugin must never log `GOTIFY_APP_TOKEN` or `GOTIFY_URL`.
 
 If you discover a security vulnerability, see [SECURITY.md](SECURITY.md) for responsible disclosure.
