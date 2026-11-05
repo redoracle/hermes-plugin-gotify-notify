@@ -66,3 +66,18 @@ jobs:
       - name: Verify Android entry points remain identical
         run: cmp utils/gotify-androidctl/gotify-androidctl utils/gotify-androidctl/gotify-androidctl.py
       - run: python -m unittest discover -s utils/gotify-androidctl/tests -p 'test_androidctl.py' -v
+
+  release-notes:
+    name: Release-notes compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install release tooling
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Test conventional release notes against the installed writer
+        run: npm run test:release-notes
