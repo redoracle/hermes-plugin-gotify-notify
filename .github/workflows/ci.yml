@@ -49,6 +49,10 @@ jobs:
       - run: python -m pip install -e ".[dev]"
       - run: python -m ruff check gotify_notify tests
       - run: python -m compileall -q gotify_notify tests scripts
+      - name: Verify release preparation script syntax and permissions
+        run: |
+          test -x scripts/prepare-release.sh
+          bash -n scripts/prepare-release.sh
       - name: Check release metadata versions
         run: python scripts/sync_version.py --check
       - name: Validate packaging metadata
