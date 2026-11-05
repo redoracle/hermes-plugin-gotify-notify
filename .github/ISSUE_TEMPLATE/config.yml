@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability (private)
+    url: https://github.com/redoracle/hermes-plugin-gotify-notify/security/advisories/new
+    about: Report vulnerabilities privately. Never post credentials or exploitable details in a public issue.
+  - name: Usage and troubleshooting
+    url: https://github.com/redoracle/hermes-plugin-gotify-notify/blob/main/SUPPORT.md
+    about: Read the troubleshooting checklist before opening a bug report.

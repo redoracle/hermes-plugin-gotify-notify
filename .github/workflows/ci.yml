@@ -9,51 +9,60 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Test / ${{ matrix.os }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.11", "3.12", "3.13"]
-
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run tests
-        run: pytest tests/ -v --tb=short -n 0
-
-      - name: Run tests with coverage
-        run: pytest tests/ --cov=gotify_notify --cov-report=term-missing -n 0
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Unit tests and coverage
+        run: python -m pytest tests/ --cov=gotify_notify --cov-report=term-missing --cov-fail-under=95
 
   lint:
+    name: Static checks and package validation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check gotify_notify tests
+      - run: python -m compileall -q gotify_notify tests scripts
+      - name: Check release metadata versions
+        run: python scripts/sync_version.py --check
+      - name: Validate packaging metadata
+        run: python -m pip check
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Check syntax
-        run: python -m py_compile gotify_notify/__init__.py
-
-      - name: Run pytest
-        run: pytest tests/ -v --tb=short -n 0
+  androidctl:
+    name: Android utility unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Verify Android entry points remain identical
+        run: cmp utils/gotify-androidctl/gotify-androidctl utils/gotify-androidctl/gotify-androidctl.py
+      - run: python -m unittest discover -s utils/gotify-androidctl/tests -p 'test_androidctl.py' -v

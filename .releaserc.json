@@ -1,18 +1,38 @@
 {
-  "branches": ["main"],
+  "branches": [
+    "main"
+  ],
   "tagFormat": "v${version}",
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
-      { "preset": "conventionalcommits" }
+      {
+        "preset": "conventionalcommits"
+      }
     ],
     [
       "@semantic-release/release-notes-generator",
-      { "preset": "conventionalcommits" }
+      {
+        "preset": "conventionalcommits"
+      }
     ],
     [
       "@semantic-release/exec",
-      { "prepareCmd": "./scripts/prepare-release.sh ${nextRelease.version}" }
+      {
+        "prepareCmd": "./scripts/prepare-release.sh ${nextRelease.version}"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "pyproject.toml",
+          "package.json",
+          "gotify_notify/__init__.py",
+          "gotify_notify/plugin.yaml"
+        ],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
     ],
     [
       "@semantic-release/github",

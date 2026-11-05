@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -33,6 +34,7 @@ _MAX_PRIORITY = 10
 _DEFAULT_PRIORITY = 5
 _DEFAULT_CONTENT_TYPE = "text/markdown"
 _DEFAULT_TIMEOUT = 10
+_MAX_RESPONSE_BYTES = 8192
 _ALLOWED_CONTENT_TYPES = frozenset({"text/markdown", "text/plain"})
 
 
@@ -48,6 +50,31 @@ def _validate_content_type(value: str) -> str:
     if value in _ALLOWED_CONTENT_TYPES:
         return value
     return _DEFAULT_CONTENT_TYPE
+
+
+def _normalize_base_url(value: str) -> str | None:
+    """Validate a Gotify HTTP(S) base URL, including reverse-proxy paths.
+
+    Reject credentials, query strings, fragments and malformed ports to avoid
+    accidentally sending an application token to an unintended destination.
+    """
+    if not value or any(char.isspace() or ord(char) < 32 for char in value):
+        return None
+    try:
+        parts = urllib.parse.urlsplit(value)
+        if (
+            parts.scheme not in {"http", "https"}
+            or not parts.hostname
+            or parts.username is not None
+            or parts.password is not None
+            or parts.query
+            or parts.fragment
+        ):
+            return None
+        _ = parts.port  # ValueError for malformed port numbers.
+    except ValueError:
+        return None
+    return value.rstrip("/")
 
 
 def _build_payload(
@@ -80,41 +107,60 @@ def _send_request(
     payload: dict[str, Any],
     timeout: int,
 ) -> dict[str, Any]:
-    """POST *payload* to the Gotify server and return a result dict.
+    """POST JSON using a redirect-safe Gotify authentication header.
 
-    The token is sent as a query parameter (Gotify's documented auth
-    method). URL construction uses ``urllib.parse.quote`` with
-    ``safe=''`` to ensure the token is fully URL-encoded.
+    ``add_unredirected_header`` prevents urllib from forwarding the token
+    to a different origin if the server responds with a redirect.
     """
-    url = f"{base_url}/message?token={urllib.parse.quote(token, safe='')}"
-    data = json.dumps(payload).encode("utf-8")
-
-    req = urllib.request.Request(
-        url,
-        data=data,
+    request = urllib.request.Request(
+        f"{base_url}/message",
+        data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json; charset=utf-8"},
         method="POST",
     )
+    request.add_unredirected_header("X-Gotify-Key", token)
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", "replace")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            # Gotify usually echoes the full submitted message in its response.
+            # Never return arbitrary server content (or a token it might echo)
+            # to the agent. Keep the existing response field, but include only
+            # the message identifier when the bounded response is valid JSON.
+            raw = response.read(_MAX_RESPONSE_BYTES + 1)
+            safe_response = ""
+            if len(raw) <= _MAX_RESPONSE_BYTES:
+                try:
+                    data = json.loads(raw)
+                    if isinstance(data, dict):
+                        message_id = data.get("id")
+                        if isinstance(message_id, int) and not isinstance(message_id, bool) and message_id >= 0:
+                            safe_response = json.dumps({"id": message_id})
+                except (ValueError, UnicodeDecodeError):
+                    pass
             return {
-                "success": 200 <= resp.status < 300,
-                "status": resp.status,
-                "response": body,
+                "success": 200 <= response.status < 300,
+                "status": response.status,
+                "response": safe_response,
             }
     except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", "replace") if exc.fp else ""
+        # Server error bodies may contain credentials or untrusted content.
         return {
             "success": False,
             "status": exc.code,
-            "error": f"HTTP {exc.code}: {body[:500]}",
+            "error": f"Gotify returned HTTP {exc.code}",
         }
-    except Exception as exc:  # noqa: BLE001 — surface all errors to the agent
+    except ConnectionRefusedError:
+        return {"success": False, "error": "Connection refused"}
+    except urllib.error.URLError as exc:
+        # Do not echo exception text: proxies and libraries may include URLs.
         return {
             "success": False,
-            "error": str(exc),
+            "error": f"Gotify connection failed ({type(exc.reason).__name__})",
+        }
+    except Exception as exc:  # noqa: BLE001 — preserve the JSON tool contract.
+        return {
+            "success": False,
+            "error": f"Gotify request failed ({type(exc).__name__})",
         }
 
 
@@ -179,8 +225,8 @@ def register(ctx: Any) -> None:
         """Handle a ``gotify_send`` tool invocation."""
         del kwargs  # Unused — reserved for future framework hooks.
 
-        base_url = _get_env("GOTIFY_URL").rstrip("/")
-        token = os.environ.get("GOTIFY_APP_TOKEN", "").strip()
+        base_url = _get_env("GOTIFY_URL")
+        token = _get_env("GOTIFY_APP_TOKEN")
 
         if not base_url or not token:
             return json.dumps({
@@ -189,6 +235,25 @@ def register(ctx: Any) -> None:
                     "Missing GOTIFY_URL or GOTIFY_APP_TOKEN environment "
                     "variable. Configure them in ~/.hermes/.env"
                 ),
+            })
+
+        if any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in token):
+            return json.dumps({
+                "success": False,
+                "error": "Invalid GOTIFY_APP_TOKEN: whitespace or control characters",
+            })
+
+        normalized_url = _normalize_base_url(base_url)
+        if normalized_url is None:
+            return json.dumps({
+                "success": False,
+                "error": "Invalid GOTIFY_URL: expected an HTTP(S) base URL without credentials, query or fragment",
+            })
+
+        if not isinstance(params, dict) or not isinstance(params.get("message"), str):
+            return json.dumps({
+                "success": False,
+                "error": "message must be a string",
             })
 
         content_type = _validate_content_type(
@@ -201,15 +266,15 @@ def register(ctx: Any) -> None:
         except ValueError:
             timeout = _DEFAULT_TIMEOUT
 
-        title = str(params.get("title") or "Hermes").strip()[:_MAX_TITLE_LEN]
-        message = str(params["message"]).strip()
+        title = str(params.get("title") or "Hermes").strip()[:_MAX_TITLE_LEN] or "Hermes"
+        message = params["message"].strip()
         try:
             priority = int(params.get("priority", _DEFAULT_PRIORITY))
         except (ValueError, TypeError):
             priority = _DEFAULT_PRIORITY
 
         payload = _build_payload(title, message, priority, content_type)
-        result = _send_request(base_url, token, payload, timeout)
+        result = _send_request(normalized_url, token, payload, timeout)
         return json.dumps(result)
 
     ctx.register_tool(

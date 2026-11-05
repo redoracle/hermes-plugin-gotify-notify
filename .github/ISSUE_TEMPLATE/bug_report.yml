@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible problem without sharing credentials
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. **Do not include tokens, passwords, private URLs, or security exploits.** Use private vulnerability reporting for security issues.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected.
+      placeholder: The notification failed with an HTTP error after I enabled the plugin...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Supply the smallest reproduction using fake credentials and hostnames.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions (Hermes, plugin, Python and OS)
+      placeholder: Hermes ..., plugin ..., Python ..., Ubuntu ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized error output
+      description: Redact tokens, passwords, private addresses and identifying details.
+      render: text

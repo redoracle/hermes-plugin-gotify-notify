@@ -2,7 +2,7 @@
 # Standalone Gotify notification plugin for Hermes Agent.
 
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=78.1.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,7 +10,7 @@ name = "hermes-plugin-gotify-notify"
 version = "1.0.0"
 description = "Gotify notification plugin for Hermes Agent — sends markdown-rendered push notifications via Gotify"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.11"
 authors = [
     {name = "redoracle"},
@@ -18,15 +18,14 @@ authors = [
 keywords = ["hermes", "hermes-agent", "gotify", "notification", "plugin"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Framework :: Hermes Agent",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Communications",
     "Topic :: System :: Monitoring",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -35,9 +34,10 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0,<9",
-    "pytest-cov>=4.0,<6",
-    "pytest-xdist>=3.0,<4",
+    "pytest>=9.2,<10",
+    "pytest-cov>=7.1,<8",
+    "pytest-xdist>=3.8,<4",
+    "ruff>=0.17.3,<0.18",
 ]
 
 [project.urls]
@@ -65,3 +65,11 @@ gotify_notify = ["plugin.yaml"]
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+
+# --- Linting -----------------------------------------------------------------
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

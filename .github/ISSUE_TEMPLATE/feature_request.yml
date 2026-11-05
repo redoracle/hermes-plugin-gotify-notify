@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose a focused improvement to the plugin or its development workflow
+labels: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the current limitation and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the expected user-facing behavior and possible alternatives.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Security and compatibility
+      description: Could this change affect credentials, redirects, dependencies, compatibility, or the JSON tool contract?
