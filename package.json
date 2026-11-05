@@ -4,11 +4,16 @@
   "private": true,
   "description": "Gotify notification plugin for Hermes Agent",
   "license": "MIT",
-  "engines": {"node": ">=22.14.0"},
+  "engines": {
+    "node": ">=22.14.0"
+  },
   "devDependencies": {
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^11.0.1",
-    "conventional-changelog-conventionalcommits": "^10.4.1",
+    "conventional-changelog-conventionalcommits": "9.3.1",
     "semantic-release": "^25.0.9"
+  },
+  "scripts": {
+    "test:release-notes": "node scripts/check-release-notes.mjs"
   }
 }

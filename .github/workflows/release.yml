@@ -40,6 +40,9 @@ jobs:
       - name: Install release dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
 
+      - name: Verify compatible release-notes generator
+        run: npm run test:release-notes
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

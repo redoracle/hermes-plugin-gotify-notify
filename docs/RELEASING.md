@@ -27,3 +27,9 @@ This repository uses Conventional Commits and [semantic-release](https://semanti
 ## Rollback
 
 If an automated release fails, inspect the workflow logs and compare the repository's version files before rerunning. Never reuse or move an immutable published version tag. Fix the release pipeline in a new conventional-commit PR, then let semantic-release choose the next version. If a bad notification plugin version was deployed, pin installation to a known-good Git commit/tag while the fix is prepared.
+
+## Release-notes compatibility guard
+
+The release-notes generator in the current semantic-release toolchain uses `conventional-changelog-writer@8`. The `conventional-changelog-conventionalcommits@10` preset requires writer v9 and fails during `generateNotes` with a missing-helper error. Keep the preset pinned to **9.3.1** until the installed release-notes generator supports writer v9. Do not silently raise this major version.
+
+Run `npm run test:release-notes` after installing release dependencies to validate realistic feature and fix sections. CI and the privileged release workflow run the same check before publishing. When updating semantic-release or the preset, verify the complete release-notes smoke test in CI before merging.
