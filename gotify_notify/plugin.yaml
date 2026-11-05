@@ -1,5 +1,5 @@
 name: gotify-notify
-version: "1.0.0"
+version: "1.1.0"
 description: >-
   Send high-value Hermes notifications to Gotify with markdown rendering.
   Configurable via GOTIFY_CONTENT_TYPE env var.
