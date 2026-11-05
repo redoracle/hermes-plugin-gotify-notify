@@ -6,7 +6,7 @@ Covers:
   * Payload construction — markdown extras, content-type override, title
     truncation, message truncation, priority clamping, default title.
   * HTTP success and failure paths (mocked urllib.request.urlopen).
-  * URL construction and token encoding.
+  * URL construction and redirect-safe header authentication.
   * Timeout parsing and clamping.
   * Edge cases — empty message, non-integer priority, invalid content type.
 """
@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -328,7 +327,8 @@ class TestHTTP:
 
         assert req.get_method() == "POST"
         assert "http://gotify.test/message" in req.full_url
-        assert "token=testtoken123" in req.full_url
+        assert req.full_url == "http://gotify.test/message"
+        assert req.get_header("X-gotify-key") == "testtoken123"
 
     @patch("urllib.request.urlopen")
     def test_content_type_header(self, mock_urlopen, plugin, env_set):
@@ -340,15 +340,16 @@ class TestHTTP:
         assert req.headers["Content-type"] == "application/json; charset=utf-8"
 
     @patch("urllib.request.urlopen")
-    def test_token_url_encoded(self, mock_urlopen, plugin, env_set, monkeypatch):
-        """Token with special characters must be URL-encoded."""
+    def test_token_sent_in_unredirected_header(self, mock_urlopen, plugin, env_set, monkeypatch):
+        """Authentication remains out of the URL, even for unusual tokens."""
         monkeypatch.setenv("GOTIFY_APP_TOKEN", "tok+en&special=1")
         mock_urlopen.return_value = _mock_response()
 
         plugin.tools["gotify_send"]["handler"]({"message": "hi"})
         req = _captured_request(mock_urlopen)
 
-        assert "token=tok%2Ben%26special%3D1" in req.full_url
+        assert req.get_header("X-gotify-key") == "tok+en&special=1"
+        assert "token=" not in req.full_url
 
 
 # --------------------------------------------------------------------------- #
@@ -426,8 +427,7 @@ class TestEdgeCases:
         })
 
         body = _captured_body(mock_urlopen)
-        # int("high") raises ValueError, which should be caught
-        # If it doesn't fall back, the test will error — that's correct
+        assert body["priority"] == 5
 
     @patch("urllib.request.urlopen")
     def test_url_with_trailing_slash_stripped(self, mock_urlopen, plugin, env_set, monkeypatch):

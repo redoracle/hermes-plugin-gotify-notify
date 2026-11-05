@@ -1,10 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
-VERSION="$1"
-echo "Preparing release ${VERSION}"
 
-# Update version in pyproject.toml
-sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
-echo "Updated pyproject.toml to ${VERSION}"
-
-echo "${VERSION}" > .release-prepared
+# semantic-release invokes this before @semantic-release/git prepares a commit.
+python3 scripts/sync_version.py "${1:?usage: prepare-release.sh VERSION}"

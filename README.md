@@ -1,54 +1,67 @@
-# hermes-plugin-gotify-notify
+# Gotify notifications for Hermes Agent
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/redoracle/hermes-plugin-gotify-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/redoracle/hermes-plugin-gotify-notify/actions/workflows/ci.yml)
+[![CI](https://github.com/redoracle/hermes-plugin-gotify-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/redoracle/hermes-plugin-gotify-notify/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/redoracle/hermes-plugin-gotify-notify/actions/workflows/codeql.yml/badge.svg)](https://github.com/redoracle/hermes-plugin-gotify-notify/actions/workflows/codeql.yml)
+[![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11--3.14-blue)](https://www.python.org/)
+[![MIT License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that sends high-value, actionable notifications to a [Gotify](https://gotify.net/) server. Messages are rendered as **markdown** in the Gotify client by default.
+A lightweight, dependency-free [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that delivers actionable push notifications through [Gotify](https://gotify.net/). It exposes one tool, `gotify_send`, and uses Gotify's native Markdown rendering support.
 
----
+**Designed for important events**, not routine tool chatter: task completions, failures, security findings, human approvals, quota/budget alerts, and concise summaries.
 
-## Features
+## Highlights
 
-- **Markdown rendering** — messages include `extras.client::display.contentType: text/markdown` so the Gotify client renders **bold**, _italic_, `code`, [links](https://gotify.net), lists, and headings natively.
-- **Configurable content type** — set `GOTIFY_CONTENT_TYPE=text/plain` to disable markdown.
-- **Zero external dependencies** — uses only Python stdlib (`urllib.request`).
-- **Configurable timeout** — `GOTIFY_TIMEOUT` env var (1–60 seconds, default: 10).
-- **Input safety** — title truncated to 120 chars, message to 4000 chars, priority clamped to 1–10, token URL-encoded, content type validated against an allowlist.
-- **Clean error handling** — missing env vars, HTTP errors, and connection failures all return structured JSON with `success: false` and an error message — no crashes.
+- **No runtime third-party packages**: Python standard library only.
+- **Safer authentication**: sends the application token in an `X-Gotify-Key` header, never as a URL parameter; the credential is not forwarded on HTTP redirects.
+- **Bounded inputs and network operations**: 120-character title, 4,000-character message, priority 1–10, timeout 1–60 seconds, and 8 KiB maximum server response read.
+- **Privacy-conscious results**: a structured JSON result reports status and, when available, only the Gotify message ID; server-supplied message text and raw failure details are not echoed back.
+- **Configurable rendering**: Markdown by default, with plain-text support.
+- **Cross-platform test coverage**: Python 3.11–3.14 on Linux and macOS in GitHub Actions.
 
-## Installation
+## Quick start
 
-### Option A: Clone into `~/.hermes/plugins/`
+### 1. Install the plugin
 
-```bash
-git clone https://github.com/redoracle/hermes-plugin-gotify-notify.git \
-  ~/.hermes/plugins/gotify-notify
-```
-
-### Option B: Install via pip
+For an existing Hermes installation, prefer the [Hermes plugin manager](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins) or install the package **into the Python environment that runs Hermes**:
 
 ```bash
-pip install git+https://github.com/redoracle/hermes-plugin-gotify-notify.git
+python -m pip install git+https://github.com/redoracle/hermes-plugin-gotify-notify.git
 ```
 
-The pip entry point (`hermes_agent.plugins`) auto-registers the plugin with Hermes' discovery system — no manual config needed.
-
-## Configuration
-
-Add the following to `~/.hermes/.env`:
+Alternatively, install as a directory plugin (copy the **package directory**, not the entire Git repository):
 
 ```bash
-# Required
-GOTIFY_URL=http://gotify.local
-GOTIFY_APP_TOKEN=your_application_token
-
-# Optional
-GOTIFY_CONTENT_TYPE=text/markdown   # or text/plain (default: text/markdown)
-GOTIFY_TIMEOUT=10                    # seconds, 1-60 (default: 10)
+git clone https://github.com/redoracle/hermes-plugin-gotify-notify.git
+mkdir -p ~/.hermes/plugins
+cp -R hermes-plugin-gotify-notify/gotify_notify ~/.hermes/plugins/gotify-notify
 ```
 
-### Enable in config.yaml
+The directory at `~/.hermes/plugins/gotify-notify/` must contain both `__init__.py` and `plugin.yaml`. The repository root is **not** itself a Hermes plugin directory.
+
+### 2. Configure Gotify
+
+Create a Gotify **Application** in its web UI, then add these values to `~/.hermes/.env`:
+
+```dotenv
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_APP_TOKEN=replace-with-your-application-token
+
+# Optional:
+GOTIFY_CONTENT_TYPE=text/markdown
+GOTIFY_TIMEOUT=10
+```
+
+For a reverse-proxy prefix, use a canonical base URL such as `https://gotify.example.com/gotify`. The plugin appends `/message` itself. **Use HTTPS on untrusted networks**; plain HTTP is supported for explicitly trusted local deployments.
+
+### 3. Enable and verify
+
+Plugins are **opt-in**: installing the Python package makes it discoverable but does not enable it. Enable the plugin through Hermes, or add its name to `~/.hermes/config.yaml`:
+
+```bash
+hermes plugins enable gotify-notify
+hermes plugins list
+hermes plugins doctor gotify-notify --ci
+```
 
 ```yaml
 plugins:
@@ -56,147 +69,79 @@ plugins:
     - gotify-notify
 ```
 
-### Restart Hermes
+Restart Hermes if required by your deployment (`hermes gateway restart` for gateway mode). If using a managed Hermes environment, prefer its plugin installer so the package survives environment replacement. Refer to the official [plugin documentation](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins).
 
-```bash
-hermes gateway restart    # gateway mode
-# or exit and relaunch the CLI
+### 4. Send a message
+
+Ask Hermes:
+
+> Send a Gotify notification titled "Deployment complete" with the message "**Staging** is healthy; see the deployment dashboard" at priority 5.
+
+Hermes calls `gotify_send` with a JSON object, for example:
+
+```json
+{
+  "title": "Deployment complete",
+  "message": "**Staging** is healthy; see the deployment dashboard",
+  "priority": 5
+}
 ```
 
-## Usage
+A successful tool response is JSON, for example:
 
-The agent calls `gotify_send` automatically when appropriate — completed long-running tasks, failures, security findings, approval requests, etc.
-
-You can also trigger it manually:
-
-> Send a gotify notification with title "Deploy complete" and message "Build **#42** succeeded on [staging](https://staging.example.com)"
-
-### Gotify Application Token
-
-1. Open your Gotify web UI.
-2. Go to **Apps** → **Create Application**.
-3. Copy the **Application Token**.
-4. Set it as `GOTIFY_APP_TOKEN` in `~/.hermes/.env`.
-
-## Android provisioning utility
-
-[`utils/gotify-androidctl`](utils/gotify-androidctl/) is an optional companion utility for operating the Gotify Android client alongside this plugin. It provisions the category Applications used by the plugin, uploads their images, deploys category sounds to Android, configures notification channels, and audits configuration drift.
-
-The plugin is the versioned deliverable (`pyproject.toml` is the source of truth). `gotify-androidctl` has no independent release version; its reports identify the utility by name only.
-
-### Typical use cases
-
-- Bootstrap a new Gotify server and Android device with the PAGER, SECURITY, INFRA, PLATFORM, AUTOMATION, DEV, DIGEST, MONEY IN/OUT, and TRADING categories.
-- Synchronize the icons in [`utils/icons`](utils/icons/) to their corresponding Gotify Applications.
-- Convert and deploy category sounds from [`utils/sounds`](utils/sounds/) to the connected Android device.
-- Create, inspect, configure, and audit the Gotify Android notification channels for each category.
-- Perform an explicit, confirmed Gotify Application-token rotation.
-
-### Usage
-
-Run commands from the repository root. The generated configuration resolves `assets.root: ".."` relative to its own location, so it continues to point at `./utils` regardless of the process working directory.
-
-```bash
-# Create a configuration without putting secrets in JSON. In a terminal this
-# starts a wizard for the Gotify URL and environment-variable names.
-./utils/gotify-androidctl/gotify-androidctl setup \
-  --output ./utils/gotify-androidctl/gotify-android.json
-
-# Edit the Gotify URL and credential environment-variable names, then verify paths and prerequisites.
-./utils/gotify-androidctl/gotify-androidctl \
-  -c ./utils/gotify-androidctl/gotify-android.json show-config
-./utils/gotify-androidctl/gotify-androidctl \
-  -c ./utils/gotify-androidctl/gotify-android.json doctor
-
-# Preview the complete mutation plan, then provision apps, images, sounds, and channels.
-./utils/gotify-androidctl/gotify-androidctl \
-  -c ./utils/gotify-androidctl/gotify-android.json --dry-run bootstrap
-./utils/gotify-androidctl/gotify-androidctl \
-  -c ./utils/gotify-androidctl/gotify-android.json bootstrap --require-icons
-
-# Reconcile only icons, then audit Android/Gotify drift in CI or scheduled jobs.
-./utils/gotify-androidctl/gotify-androidctl \
-  -c ./utils/gotify-androidctl/gotify-android.json icons
-./utils/gotify-androidctl/gotify-androidctl \
-  -c ./utils/gotify-androidctl/gotify-android.json --non-interactive --strict audit --fail-on-drift
+```json
+{"success": true, "status": 200, "response": "{\"id\": 42}"}
 ```
 
-If an interactive command references a missing `-c` file, the utility starts the same setup wizard, writes the configuration, and exits without provisioning. In CI or another non-interactive environment it exits with a safe, copyable `setup --non-interactive --gotify-url ...` command instead.
+`response` is deliberately minimal: it contains a serialized message-ID object when Gotify provides a valid nonnegative integer `id`, or an empty string otherwise. A failure returns `{"success": false, "error": "..."}` and, for an HTTP failure, a `status` code. **No automatic retries** are performed: a retry after an ambiguous network failure could duplicate the notification.
 
-### Constraints and safety
+## Configuration reference
 
-- Requires `adb`, `curl`, and a connected Android device with USB or wireless debugging enabled. `ffmpeg` is required only when conversion to the selected audio format is needed. OGG deployment requires an FFmpeg Vorbis encoder (`libvorbis` or native `vorbis`); verify with `ffmpeg -hide_banner -encoders | rg 'libvorbis| vorbis'`.
-- Gotify Application provisioning and token rotation require Gotify management credentials; rotate tokens only with `--confirm-token-rotation`.
-- Android 8+ channel sound and importance settings become user-controlled after channel creation. The utility uses supported Settings intents and semantic UI automation, then falls back to guided mode rather than changing private Android databases.
-- Icon and sound configuration values are filename-only and cannot escape the configured `./utils/icons` and `./utils/sounds` directories. Audio sources are never overwritten, ADB uploads are hash-verified by default, and normal reports redact tokens.
-- The full local self-test exercises WAV-to-OGG conversion. Install FFmpeg with a Vorbis encoder before running it; the utility prefers `libvorbis` and automatically falls back to native `vorbis` (with stereo conversion) when available.
+| Environment variable | Required | Default | Behavior |
+| --- | --- | --- | --- |
+| `GOTIFY_URL` | Yes | — | Absolute HTTP(S) base URL; no embedded credentials, query or fragment |
+| `GOTIFY_APP_TOKEN` | Yes | — | Gotify **Application** token, never a client or administrator password |
+| `GOTIFY_CONTENT_TYPE` | No | `text/markdown` | `text/markdown` or `text/plain` (invalid values fall back to Markdown) |
+| `GOTIFY_TIMEOUT` | No | `10` | Integer seconds; clamped to 1–60 |
 
-See the [gotify-androidctl guide](utils/gotify-androidctl/README.md) for the complete command and configuration reference.
+Tool parameters: `message` (required string, truncated to 4,000 characters), `title` (optional, defaults to `Hermes`, truncated to 120 characters), and `priority` (optional, defaults to 5, clamped to 1–10). Common priorities: 2 informational, 5 important, 8 urgent, 10 critical.
 
-## Environment Variables
+## Architecture and security
 
-| Variable              | Required | Default         | Description                                                          |
-| --------------------- | -------- | --------------- | -------------------------------------------------------------------- |
-| `GOTIFY_URL`          | Yes      | —               | Gotify server base URL                                               |
-| `GOTIFY_APP_TOKEN`    | Yes      | —               | Application token from Gotify                                        |
-| `GOTIFY_CONTENT_TYPE` | No       | `text/markdown` | Content-Type for message rendering (`text/markdown` or `text/plain`) |
-| `GOTIFY_TIMEOUT`      | No       | `10`            | Request timeout in seconds (1–60)                                    |
-
-## Tool Schema
-
-| Parameter  | Type    | Required | Default  | Description                                                        |
-| ---------- | ------- | -------- | -------- | ------------------------------------------------------------------ |
-| `message`  | string  | Yes      | —        | Notification body (markdown, max 4000 chars)                       |
-| `title`    | string  | No       | `Hermes` | Notification title (max 120 chars)                                 |
-| `priority` | integer | No       | `5`      | Gotify priority (1–10; 2=info, 5=important, 8=urgent, 10=critical) |
-
-## How It Works
-
-The plugin registers a `gotify_send` tool with the Hermes `PluginManager`. When the agent decides a notification is warranted, it calls the tool with a title, message, and priority. The plugin:
-
-1. Reads `GOTIFY_URL` and `GOTIFY_APP_TOKEN` from the environment.
-2. Constructs a JSON payload with the message, title, priority, and `extras.client::display.contentType`.
-3. POSTs to `{GOTIFY_URL}/message?token={GOTIFY_APP_TOKEN}`.
-4. Returns a JSON result with `success`, `status`, and `response` (or `error`).
-
-The markdown rendering uses Gotify's [message extras](https://gotify.net/docs/msgextras#clientdisplay) — specifically the `client::display.contentType` field. This is a documented Gotify feature, not a hack.
-
-## Security
-
-- **No secrets in code** — all credentials are read from environment variables.
-- **Token URL-encoded** — the application token is fully URL-encoded via `urllib.parse.quote(token, safe='')`.
-- **Content type allowlist** — `GOTIFY_CONTENT_TYPE` is validated against `{"text/markdown", "text/plain"}`; invalid values fall back to the default.
-- **Timeout bounded** — `GOTIFY_TIMEOUT` is clamped to 1–60 seconds; invalid values fall back to 10.
-- **No logging of secrets** — the plugin never logs the token or URL.
-- **Stdlib only** — no third-party dependencies to audit.
-
-See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability reporting instructions.
-
-## Testing
-
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/ -v
-
-# Run with coverage
-pytest tests/ --cov=gotify_notify --cov-report=term-missing
+```text
+Hermes Agent  →  gotify_send  →  validation / bounded JSON  →  HTTPS POST /message
+                                                          X-Gotify-Key header
+                                                        →  Gotify server / clients
 ```
 
-All 30 tests pass with zero network calls (HTTP is mocked via `unittest.mock`).
+The `register(ctx)` entry point provides the Hermes tool. Authentication is based only on operator-supplied environment configuration; agent-provided parameters **cannot change the destination or token**. The plugin does not persist credentials or maintain a queue. Redirected requests do not inherit the authentication header.
 
-## Compatibility
+- [Architecture and trust boundaries](docs/ARCHITECTURE.md)
+- [Security policy and private vulnerability reporting](SECURITY.md)
+- [Operational troubleshooting](SUPPORT.md)
+- [Release process](docs/RELEASING.md)
 
-- Hermes Agent v0.18+
-- Python 3.11, 3.12, 3.13
-- Any OS that runs Hermes (Linux, macOS, Windows)
+## Android companion utility
 
-## License
+The optional [`gotify-androidctl`](utils/gotify-androidctl/README.md) helps provision Gotify applications, icons, sounds, notification channels, and Android drift audits. It is **independent of the Python plugin** and has hardware/system dependencies (`adb`, and optionally FFmpeg). Review its [full guide](utils/gotify-androidctl/README.md) and [security policy](utils/gotify-androidctl/SECURITY.md) before making changes to a connected device.
 
-[MIT](LICENSE) — © 2026 redoracle
+## Development and verification
 
-## Contributing
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+python -m pytest tests/ --cov=gotify_notify --cov-report=term-missing --cov-fail-under=95
+python -m ruff check gotify_notify tests
+python scripts/sync_version.py --check
+python -m compileall -q gotify_notify tests scripts
+```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Pull requests, bug reports, and feature suggestions are welcome.
+The tests mock HTTP and do not require live Gotify credentials. CI additionally runs the Android companion unit suite without connected devices; hardware-dependent provisioning tests are documented separately. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CI workflow](.github/workflows/ci.yml).
+
+## Project governance
+
+- [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Support](SUPPORT.md)
+- [Security](SECURITY.md) · [License](LICENSE) · [Changelog](CHANGELOG.md)
+
+MIT licensed. Maintained by [redoracle](https://github.com/redoracle).
