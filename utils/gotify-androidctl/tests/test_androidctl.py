@@ -248,6 +248,49 @@ class AndroidCtlTests(unittest.TestCase):
             ui.adb.screenshot.assert_called_once()
             self.assertEqual(list(pathlib.Path(tmp).iterdir()), [])
 
+ 
+    def test_one_time_token_survives_secret_store_write_failure(self):
+        """A token exposed only once must remain recoverable with mode 0600."""
+        with tempfile.TemporaryDirectory() as directory:
+            controller = MODULE.Controller.__new__(MODULE.Controller)
+            controller.temp_dir = pathlib.Path(directory)
+            controller.settings = types.SimpleNamespace(preserve_temp=False)
+            controller.secrets = types.SimpleNamespace(
+                write_token=mock.Mock(side_effect=OSError("read-only test secret store"))
+            )
+            app = MODULE.AppSpec(key="pager", name="PAGER", app_id=5)
+            token = "one-time-app-token-must-be-kept"
+
+            with self.assertRaises(MODULE.ToolError) as raised:
+                controller._store_token_or_preserve_recovery(app, token)
+
+            recovery = controller.temp_dir / "RECOVERY-pager.token"
+            self.assertEqual(recovery.read_text(), token + "\n")
+            self.assertEqual(recovery.stat().st_mode & 0o777, 0o600)
+            self.assertTrue(controller.settings.preserve_temp)
+            self.assertNotIn(token, str(raised.exception))
+            controller.secrets.write_token.assert_called_once_with("pager", token)
+
+    def test_primary_and_recovery_storage_failure_is_explicit_and_does_not_leak(self):
+        with tempfile.TemporaryDirectory() as directory:
+            controller = MODULE.Controller.__new__(MODULE.Controller)
+            controller.temp_dir = pathlib.Path(directory)
+            controller.settings = types.SimpleNamespace(preserve_temp=False)
+            controller.secrets = types.SimpleNamespace(
+                write_token=mock.Mock(side_effect=OSError("cannot write secrets"))
+            )
+            token = "one-time-app-token-must-not-leak"
+            app = MODULE.AppSpec(key="pager", name="PAGER", app_id=5)
+
+            with mock.patch.object(MODULE.os, "open", side_effect=OSError("disk full")):
+                with self.assertRaises(MODULE.ToolError) as raised:
+                    controller._store_token_or_preserve_recovery(app, token)
+
+            self.assertIn("both", str(raised.exception))
+            self.assertNotIn(token, str(raised.exception))
+            self.assertFalse(list(controller.temp_dir.glob("RECOVERY-*")))
+
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

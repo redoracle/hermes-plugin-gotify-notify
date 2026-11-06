@@ -77,17 +77,27 @@ import json,pathlib,sys
 d=json.load(open(sys.argv[1])); root=pathlib.Path(sys.argv[2]).resolve(); assert pathlib.Path(d['assets_root'])==root; assert pathlib.Path(d['icons_dir'])==root/'icons'; assert pathlib.Path(d['sounds_dir'])==root/'sounds'; assert d['audio']['format']=='ogg'
 print('PASS config-relative asset-root resolution')
 PY
-# WAV master -> cached OGG/Vorbis conversion, if ffmpeg exists.
+# CI requires real FFmpeg conversion; optional in developer-only smoke runs.
+if [[ "${GOTIFY_REQUIRE_FFMPEG:-0}" == "1" ]]; then
+  command -v ffmpeg >/dev/null || { echo 'FFmpeg is required for CI conversion tests' >&2; exit 10; }
+  command -v ffprobe >/dev/null || { echo 'FFprobe is required for CI codec verification' >&2; exit 10; }
+fi
+# WAV master -> cached OGG/Vorbis conversion; validate the encoded codec.
 if command -v ffmpeg >/dev/null; then
   ffmpeg -hide_banner -loglevel error -f lavfi -i 'sine=frequency=900:duration=0.20' -c:a pcm_s16le "$TMP/sounds/security.wav" -y
   python3 - "$CLI" "$TMP/sounds" "$TMP/audio-cache" <<'PY'
-import importlib.machinery,importlib.util,pathlib,sys
+import importlib.machinery,importlib.util,pathlib,shutil,subprocess,sys
 cli,sounds,cache=sys.argv[1:]
 loader=importlib.machinery.SourceFileLoader('gctl',cli); spec=importlib.util.spec_from_loader(loader.name,loader); m=importlib.util.module_from_spec(spec); sys.modules['gctl']=m; loader.exec_module(m)
 argv=['--no-config','--sounds-dir',sounds,'--audio-cache-dir',cache,'show-config']; args=m.build_parser().parse_args(argv); settings,apps,_=m.load_everything(args,argv); m.validate_args(args,settings,apps); c=m.Controller(args,settings,apps)
 try:
     src=c._sound_source('security.ogg'); assert src and src.suffix=='.wav'; out=c._transcode_sound(src,'security.ogg'); assert out.is_file() and out.suffix=='.ogg' and out.stat().st_size>0
     out2=c._transcode_sound(src,'security.ogg'); assert out2==out
+    if shutil.which('ffprobe'):
+        probe=subprocess.run(['ffprobe','-v','error','-select_streams','a:0',
+            '-show_entries','stream=codec_name','-of','default=noprint_wrappers=1:nokey=1',str(out)],
+            check=True,capture_output=True,text=True,timeout=10)
+        assert probe.stdout.strip()=='vorbis', f'Expected Ogg/Vorbis audio, got {probe.stdout!r}'
 finally: c.close()
 print('PASS WAV -> content-addressed OGG/Vorbis conversion/cache')
 PY
