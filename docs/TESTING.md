@@ -4,11 +4,11 @@ The project uses complementary test layers. Do not confuse statement coverage or
 
 | Layer | Execution | Evidence |
 | --- | --- | --- |
-| Python unit and regression tests | \`python -m pytest tests/\` | Input validation, error handling, payload and release metadata contracts |
-| Loopback HTTP contract tests | Included in \`tests/\` | Real HTTP framing, headers, response redaction, 401/503; a deterministic in-process server |
-| Real Gotify integration | \`python -m pytest integration/test_real_gotify.py\` | Real Gotify 2/3 application-token issue, notification persistence in the server database, response shape and Markdown extras |
-| Android utility tests | CI \`androidctl\` job | ADB mock safety, app provisioning/rotation and token recovery |
-| FFmpeg conversion/cache | CI \`androidctl\` job with FFmpeg installed | Real WAV to OGG/Vorbis conversion, codec and cache reuse |
+| Python unit and regression tests | `python -m pytest tests/` | Input validation, error handling, payload and release metadata contracts |
+| Loopback HTTP contract tests | Included in `tests/` | Real HTTP framing, headers, response redaction, 401/503; a deterministic in-process server |
+| Real Gotify integration | `python -m pytest integration/test_real_gotify.py` | Real Gotify 2/3 application-token issue, notification persistence in the server database, response shape and Markdown extras |
+| Android utility tests | CI `androidctl` job | ADB mock safety, app provisioning/rotation and token recovery |
+| FFmpeg conversion/cache | CI `androidctl` job with FFmpeg installed | Real WAV to OGG/Vorbis conversion, codec and cache reuse |
 | Physical Android/OEM | Not automatically covered | Pixel/Samsung channel-settings navigation, device state, notifications and UI selector compatibility |
 
 ## Disposable real Gotify server
@@ -17,7 +17,7 @@ These tests **must never be pointed at a production service**. The fixture rejec
 
 Example for local Docker use (the data is disposable; do not reuse a production volume):
 
-\`\`\`bash
+```bash
 docker run --rm --name hermes-gotify-integration -p 127.0.0.1:8090:80 \
   -e GOTIFY_DEFAULTUSER_PASS=ci-disposable-gotify-password gotify/server:3.1.1
 
@@ -26,7 +26,7 @@ python -m pip install -e '.[dev]'
 GOTIFY_TEST_URL=http://127.0.0.1:8090 \
 GOTIFY_TEST_ADMIN_PASSWORD=ci-disposable-gotify-password \
 python -m pytest integration/test_real_gotify.py -v
-\`\`\`
+```
 
 The integration fixtures wait for the actual HTTP health endpoint with a monotonic deadline, then provision an application via the documented admin API. The test invokes the plugin's registered handler and queries the message list to verify persistence. No actual administrator password or token is committed.
 
@@ -34,12 +34,12 @@ The Docker image versions are intentionally pinned to patch tags. Changing suppo
 
 ## Android recovery and media verification
 
-\`\`\`bash
+```bash
 python -m unittest discover -s utils/gotify-androidctl/tests -p 'test_androidctl.py' -v
 GOTIFY_REQUIRE_FFMPEG=1 bash utils/gotify-androidctl/selftest.sh
-\`\`\`
+```
 
-The strict self-test needs \`curl\`, \`ffmpeg\` and \`ffprobe\`. It creates only temporary mock-server resources and validates one-time tokens, permission modes, idempotent provisioning, rotation boundaries, and audio codec/cache. Android hardware is not required.
+The strict self-test needs `curl`, `ffmpeg` and `ffprobe`. It creates only temporary mock-server resources and validates one-time tokens, permission modes, idempotent provisioning, rotation boundaries, and audio codec/cache. Android hardware is not required.
 
 The unit fault-injection tests simulate primary and recovery-storage errors. The tool preserves a 0600 recovery copy of a one-time token when possible. Fatal process termination or device disconnection at arbitrary phases remains a separate recovery risk.
 
