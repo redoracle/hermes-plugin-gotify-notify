@@ -18,7 +18,15 @@ s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()
 PY
 )"
 SERVER_STATE="$TMP/server-state.json"
-python3 "$MOCK" "$PORT" "$SERVER_STATE" >"$TMP/server.log" 2>&1 & SERVER_PID=$!; sleep .25
+python3 "$MOCK" "$PORT" "$SERVER_STATE" >"$TMP/server.log" 2>&1 & SERVER_PID=$!
+# Wait on the actual HTTP endpoint rather than assuming a fixed startup delay.
+READY=0
+for _ in {1..50}; do
+  if curl --silent --max-time 1 --fail "http://127.0.0.1:$PORT/version" >/dev/null; then READY=1; break; fi
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then cat "$TMP/server.log" >&2; exit 1; fi
+  sleep .1
+done
+[[ "$READY" -eq 1 ]] || { cat "$TMP/server.log" >&2; echo 'mock Gotify server never became ready' >&2; exit 1; }
 export GOTIFY_PASSWORD='secret'
 BASE=("$CLI" --no-config --color never --state-file "$TMP/client-state.json" --icons-dir "$TMP/icons" --gotify-url "http://127.0.0.1:$PORT" --gotify-username admin --gotify-password-env GOTIFY_PASSWORD)
 SECRETS_A="$TMP/secrets-a"; PROV_A="$TMP/provisioning-a.json"; BUNDLE="$TMP/tokens.env"
@@ -37,7 +45,22 @@ import json,sys
 s=json.load(open(sys.argv[1])); assert s['create_counter']==10; assert s['image_upload_counter']==10
 print('PASS idempotent Application + icon provisioning')
 PY
+# Verify the mock server enforces the same application-token boundary as Gotify.
 SECURITY_FILE="$(echo "$SECRETS_A"/*/apps/security.token)"; BEFORE="$(cat "$SECURITY_FILE")"
+curl --silent --show-error --fail --max-time 5 \
+  -H "X-Gotify-Key: $BEFORE" -H "Content-Type: application/json" \
+  -d '{"message":"provisioned app notification","priority":5}' \
+  "http://127.0.0.1:$PORT/message" > "$TMP/message-response.json"
+python3 - "$TMP/message-response.json" <<'PY'
+import json,sys
+message=json.load(open(sys.argv[1])); assert message['id']==123
+assert message['message']=='provisioned app notification'
+print('PASS real HTTP notification authenticated with provisioned application token')
+PY
+UNAUTHORIZED="$(curl --silent --max-time 5 --output /dev/null --write-out '%{http_code}' \
+  -u admin:secret -H 'Content-Type: application/json' \
+  -d '{"message":"must be rejected"}' "http://127.0.0.1:$PORT/message")"
+[[ "$UNAUTHORIZED" == 401 ]] || { echo "expected HTTP 401 for administrator message submission; got $UNAUTHORIZED" >&2; exit 1; }
 "${BASE[@]}" --secret-dir "$SECRETS_A" --provisioning-output "$PROV_A" --app security rotate-tokens --confirm-token-rotation --reason selftest >/dev/null
 [[ "$BEFORE" != "$(cat "$SECURITY_FILE")" ]]
 python3 - "$SERVER_STATE" "$PROV_A" <<'PY'
