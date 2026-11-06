@@ -159,3 +159,13 @@ def test_invalid_or_large_success_responses_are_not_reflected(send, body):
         result = json.loads(send({"message": "hello"}))
     assert result["success"] is True
     assert result["response"] == ""
+ 
+@pytest.mark.parametrize("priority", [float("inf"), float("-inf"), "1e9999", None])
+def test_invalid_priority_falls_back_to_default_without_crashing(send, priority):
+    response = MagicMock(status=200)
+    response.read.return_value = b'{"id": 16}'
+    response.__enter__.return_value = response
+    with patch("urllib.request.urlopen", return_value=response) as opener:
+        result = json.loads(send({"message": "Deployment finished", "priority": priority}))
+    assert result == {"success": True, "status": 200, "response": '{"id": 16}'}
+    assert json.loads(opener.call_args.args[0].data)["priority"] == 5

@@ -409,13 +409,12 @@ class TestTimeout:
 
 
 class TestEdgeCases:
+    @pytest.mark.parametrize("message", ["", "  ", "\n\t"])
     @patch("urllib.request.urlopen")
-    def test_empty_message_still_sends(self, mock_urlopen, plugin, env_set):
-        mock_urlopen.return_value = _mock_response()
-
-        result = plugin.tools["gotify_send"]["handler"]({"message": ""})
-        data = json.loads(result)
-        assert data["success"] is True
+    def test_blank_message_is_rejected_without_http(self, mock_urlopen, plugin, env_set, message):
+        result = plugin.tools["gotify_send"]["handler"]({"message": message})
+        assert json.loads(result) == {"success": False, "error": "message must not be empty"}
+        mock_urlopen.assert_not_called()
 
     @patch("urllib.request.urlopen")
     def test_non_integer_priority_falls_back(self, mock_urlopen, plugin, env_set):
