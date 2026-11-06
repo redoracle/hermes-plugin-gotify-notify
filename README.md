@@ -137,7 +137,7 @@ python scripts/sync_version.py --check
 python -m compileall -q gotify_notify tests scripts
 ```
 
-The test suite combines mocked unit tests with a deterministic localhost HTTP contract server. No external Gotify credentials or Internet connectivity are required. CI also exercises Android companion unit tests and an isolated provisioning/token-rotation self-test against a local mock Gotify server; genuine hardware/OEM workflows remain separately gated. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CI workflow](.github/workflows/ci.yml).
+Unit tests use mocks and deterministic loopback HTTP without external credentials. A separate CI job additionally runs the plugin against disposable **real Gotify 2.9.1 and 3.1.1 servers**, checking persisted messages and authentication. The Android job exercises provisioning, token rotation, and **mandatory FFmpeg/Vorbis conversion**; genuine device/OEM workflows remain separately gated. See [testing architecture and integration setup](docs/TESTING.md). See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CI workflow](.github/workflows/ci.yml).
 
 ## Project governance
 

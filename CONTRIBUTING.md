@@ -32,13 +32,13 @@ python scripts/sync_version.py --check
 
 # Companion CLI unit suite
 python -m unittest discover -s utils/gotify-androidctl/tests -p 'test_androidctl.py'
-bash utils/gotify-androidctl/selftest.sh
+GOTIFY_REQUIRE_FFMPEG=1 bash utils/gotify-androidctl/selftest.sh  # requires ffmpeg + ffprobe
 
 # Single test class
 pytest tests/test_gotify_notify.py::TestPayload -v
 ```
 
-Tests may exercise real HTTP exclusively against ephemeral, loopback-only in-process servers; no Internet or production credentials are permitted. Validate observable request payloads, authentication, server responses and state changes rather than relying on mocks alone.
+Unit tests may exercise real HTTP only against ephemeral loopback in-process servers. The separate integration suite uses a disposable Docker-hosted Gotify 2/3 instance on 127.0.0.1; never configure a production endpoint or production credentials. Assert real persistence, authentication, and response semantics. See [docs/TESTING.md](docs/TESTING.md).
 
 ## Code Style
 
@@ -100,6 +100,8 @@ tests/
 ├── test_security_regression.py # URL, header, and error security tests
 ├── test_http_contract.py       # Local HTTP delivery and failure contracts
 ├── test_version_sync.py        # Release metadata tests
+integration/
+├── test_real_gotify.py         # Disposable Gotify 2/3 database persistence tests
 scripts/
 ├── sync_version.py             # Staged version sync with best-effort rollback
 ```

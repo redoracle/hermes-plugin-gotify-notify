@@ -36,3 +36,10 @@ At audit time, the first-pass patch already raised Python development tools to c
 - Version synchronization stages changed files, preserves permissions and attempts rollback after ordinary I/O failures. This is **not** a filesystem transaction under abrupt process failure; release workflows should still run the read-only consistency checker.
 - Hardware-backed Android/OEM integration, real Gotify persistence and a reviewed npm lockfile remain separate, outstanding verification work.
 
+## Real-service and recovery verification (November 2026)
+
+- Added an isolated CI job using pinned Gotify 2.9.1 and 3.1.1 Docker images. The job creates a disposable application and verifies a message is persisted with the expected Markdown extras, priority, and title; invalid tokens are refused.
+- CI installs FFmpeg/FFprobe and fails rather than silently skipping the real WAV-to-OGG/Vorbis conversion/cache validation.
+- Added fault-injection assertions for one-time application-token recovery if the primary secret store is unavailable, including 0600 recovery permissions and no raw token in the error.
+- Local plugin unit/contract tests remain credential-free; real Gotify tests are isolated from the default unit suite and are restricted to 127.0.0.1.
+- Physical Android/OEM UI behavior and crash-consistent multi-file version transactions remain outside the CI assurance boundary.
