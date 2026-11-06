@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-plugin-gotify-notify"
-version = "1.1.0"
+version = "1.1.1"
 description = "Gotify notification plugin for Hermes Agent — sends markdown-rendered push notifications via Gotify"
 readme = "README.md"
 license = "MIT"

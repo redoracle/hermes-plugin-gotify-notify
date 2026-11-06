@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __all__ = ["register"]
 
 # --- Constants ---------------------------------------------------------------
