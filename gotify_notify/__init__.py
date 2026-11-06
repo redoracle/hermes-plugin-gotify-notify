@@ -268,9 +268,11 @@ def register(ctx: Any) -> None:
 
         title = str(params.get("title") or "Hermes").strip()[:_MAX_TITLE_LEN] or "Hermes"
         message = params["message"].strip()
+        if not message:
+            return json.dumps({"success": False, "error": "message must not be empty"})
         try:
             priority = int(params.get("priority", _DEFAULT_PRIORITY))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             priority = _DEFAULT_PRIORITY
 
         payload = _build_payload(title, message, priority, content_type)

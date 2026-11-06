@@ -153,6 +153,9 @@ class AndroidCtlTests(unittest.TestCase):
     def test_channel_parser_and_drift_for_pixel_style_dump(self):
         dump = """NotificationChannel{mId='5::gotify_messages_min_importance', mName=Old, mImportance=1, mSound=null, mVibrationEnabled=false, mDeleted=true}\nNotificationChannel{mId='5::gotify_messages_min_importance', mName=Min, mImportance=1, mSound=null, mVibrationEnabled=false, mUserLockedFields=0}\nNotificationChannel{mId='5::gotify_messages_default_importance', mName=Default, mImportance=3, mSound=content://media/external/audio/media/42, mVibrationEnabled=true, mUserLockedFields=0}"""
         rows = MODULE.Controller.parse_notification_channels(dump)
+        self.assertEqual(len(rows["5::gotify_messages_min_importance"]), 1)
+        self.assertEqual(rows["5::gotify_messages_min_importance"][0]["name"], "Min")
+        self.assertNotIn("mDeleted=true", rows["5::gotify_messages_min_importance"][0]["raw"])
         self.assertEqual(rows["5::gotify_messages_min_importance"][0]["importance"], 1)
         self.assertFalse(rows["5::gotify_messages_min_importance"][0]["vibration"])
         self.assertEqual(MODULE.Controller.sound_uri_to_name("content://media/external/audio/media/42", {"42": "pager.ogg"}), "pager.ogg")
@@ -164,7 +167,7 @@ class AndroidCtlTests(unittest.TestCase):
         for offset, row in enumerate(MODULE.DEFAULT_APPS, start=5):
             app = MODULE.AppSpec(key=row["id"], name=row["name"], app_id=offset)
             for cls, suffix in MODULE.CHANNEL_SUFFIXES.items():
-                self.assertEqual(f"{app.app_id}::{suffix}", f"{offset}::{suffix}")
+                self.assertEqual(MODULE.Controller.channel_id(None, app, cls), f"{offset}::{suffix}")
 
     def test_existing_per_app_channel_skips_launcher(self):
         controller = MODULE.Controller.__new__(MODULE.Controller)
@@ -176,13 +179,42 @@ class AndroidCtlTests(unittest.TestCase):
         self.assertTrue(controller.ensure_separate_app_channels())
 
     def test_ui_find_prefers_checkable_switch_descendant(self):
-        controller = MODULE.UIAutomator.__new__(MODULE.UIAutomator)
-        controller.dump = lambda: None
-        # Structural regression coverage lives below in XML parsing helper;
-        # preserve this invariant in source without synthesizing ADB input.
-        source = (ROOT / "gotify-androidctl.py").read_text(encoding="utf-8")
-        self.assertIn("for desc in selected.iter()", source)
-        self.assertIn("selected = desc", source)
+        # The clickable label and the checkable switch have distinct bounds.
+        with tempfile.TemporaryDirectory() as tmp:
+            xml = pathlib.Path(tmp) / "ui.xml"
+            xml.write_text(
+                '<hierarchy><node text="Vibration" clickable="true" '
+                'bounds="[0,0][200,120]"><node class="android.widget.Switch" '
+                'checked="true" clickable="false" bounds="[130,20][190,80]" />'
+                '</node></hierarchy>', encoding="utf-8"
+            )
+            ui = MODULE.UIAutomator.__new__(MODULE.UIAutomator)
+            ui.dump = lambda: xml
+
+            result = ui.find(r"^Vibration$", checked=True)
+
+            self.assertIsNotNone(result)
+            self.assertEqual((result["x"], result["y"]), (160, 50))
+            self.assertIs(result["checked"], True)
+            self.assertIsNone(ui.find(r"^Vibration$", checked=False))
+
+    def test_ui_find_filters_checked_state_across_siblings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            xml = pathlib.Path(tmp) / "ui.xml"
+            xml.write_text(
+                '<hierarchy>'
+                '<node text="Vibration" checked="false" bounds="[0,0][100,40]" />'
+                '<node text="Vibration" checked="true" bounds="[0,50][100,90]" />'
+                '</hierarchy>', encoding="utf-8"
+            )
+            ui = MODULE.UIAutomator.__new__(MODULE.UIAutomator)
+            ui.dump = lambda: xml
+
+            checked = ui.find(r"^Vibration$", checked=True)
+            unchecked = ui.find(r"^Vibration$", checked=False)
+
+            self.assertEqual((checked["x"], checked["y"]), (50, 70))
+            self.assertEqual((unchecked["x"], unchecked["y"]), (50, 20))
 
     def test_silent_channel_does_not_require_hidden_pixel_vibration_control(self):
         controller = MODULE.Controller.__new__(MODULE.Controller)
@@ -212,6 +244,9 @@ class AndroidCtlTests(unittest.TestCase):
             ui.dump = mock.Mock(side_effect=UnicodeDecodeError("utf-8", b"\x89", 0, 1, "bad"))
             ui.adb = types.SimpleNamespace(screenshot=mock.Mock(side_effect=OSError("adb unavailable")))
             ui.failure_artifacts("pager/min")
+            ui.dump.assert_called_once()
+            ui.adb.screenshot.assert_called_once()
+            self.assertEqual(list(pathlib.Path(tmp).iterdir()), [])
 
 
 if __name__ == "__main__":

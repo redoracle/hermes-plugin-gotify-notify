@@ -32,12 +32,13 @@ python scripts/sync_version.py --check
 
 # Companion CLI unit suite
 python -m unittest discover -s utils/gotify-androidctl/tests -p 'test_androidctl.py'
+bash utils/gotify-androidctl/selftest.sh
 
 # Single test class
 pytest tests/test_gotify_notify.py::TestPayload -v
 ```
 
-All tests use mocked HTTP — no live Gotify server is needed. Never add tests that make real network calls.
+Tests may exercise real HTTP exclusively against ephemeral, loopback-only in-process servers; no Internet or production credentials are permitted. Validate observable request payloads, authentication, server responses and state changes rather than relying on mocks alone.
 
 ## Code Style
 
@@ -97,9 +98,10 @@ tests/
 ├── __init__.py      # Path setup
 ├── test_gotify_notify.py       # Original behavior regression tests
 ├── test_security_regression.py # URL, header, and error security tests
+├── test_http_contract.py       # Local HTTP delivery and failure contracts
 ├── test_version_sync.py        # Release metadata tests
 scripts/
-├── sync_version.py             # Atomic release version synchronization
+├── sync_version.py             # Staged version sync with best-effort rollback
 ```
 
 The plugin entry point is `register(ctx)` — called by Hermes' `PluginManager` during discovery. It registers a single tool (`gotify_send`) with its schema and handler.

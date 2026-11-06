@@ -1201,18 +1201,17 @@ class UIAutomator:
                             # toggles the preference on current Pixel UI.
                             selected = desc
                             break
-                if checked is not None and chk in ("true", "false") and (chk == "true") != checked:
-                    pass
-                center = self._bounds_center(selected.attrib.get("bounds", ""))
-                if center:
-                    return {
-                        "x": center[0], "y": center[1], "text": text,
-                        "checked": None if chk not in ("true", "false") else chk == "true",
-                        "selected": selected.attrib.get("selected") == "true",
-                        "resource_id": selected.attrib.get("resource-id", ""),
-                        "class": selected.attrib.get("class", ""),
-                        "enabled": selected.attrib.get("enabled", "true") == "true",
-                    }
+                if checked is None or (chk in ("true", "false") and (chk == "true") == checked):
+                    center = self._bounds_center(selected.attrib.get("bounds", ""))
+                    if center:
+                        return {
+                            "x": center[0], "y": center[1], "text": text,
+                            "checked": None if chk not in ("true", "false") else chk == "true",
+                            "selected": selected.attrib.get("selected") == "true",
+                            "resource_id": selected.attrib.get("resource-id", ""),
+                            "class": selected.attrib.get("class", ""),
+                            "enabled": selected.attrib.get("enabled", "true") == "true",
+                        }
             for child in list(node):
                 found = walk(child, parents + [node])
                 if found:

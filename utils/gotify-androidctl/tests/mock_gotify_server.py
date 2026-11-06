@@ -14,6 +14,7 @@ def auth_kind(h):
         if v=='admin:secret': return 'basic'
     if x=='C-elevated': return 'client-elevated'
     if x=='C-non': return 'client'
+    if x and any(a.get('token')==x for a in apps): return 'application'
     return None
 class H(BaseHTTPRequestHandler):
     protocol_version='HTTP/1.1'
@@ -47,8 +48,13 @@ class H(BaseHTTPRequestHandler):
             if not app: return self.sendj(404,{'error':'not found'})
             image_upload_counter+=1; app['image']=f'image/mock-{aid}.png'; dump(); return self.sendj(200,{k:v for k,v in app.items() if k!='token'})
         if self.path=='/message':
-            if not auth_kind(self): return self.sendj(401,{'error':'unauthorized'})
-            body=self.readj(); return self.sendj(200,{'id':123,'appid':body.get('appid',1),'message':body.get('message',''),'title':body.get('title',''),'priority':body.get('priority',0)})
+            if auth_kind(self)!='application': return self.sendj(401,{'error':'application token required'})
+            body=self.readj()
+            if not isinstance(body,dict) or not isinstance(body.get('message'),str) or not body['message'].strip():
+                return self.sendj(400,{'error':'message required'})
+            if not isinstance(body.get('priority',0),int) or isinstance(body.get('priority'),bool):
+                return self.sendj(400,{'error':'priority must be an integer'})
+            return self.sendj(200,{'id':123,'appid':body.get('appid',1),'message':body['message'],'title':body.get('title',''),'priority':body.get('priority',0)})
         return self.sendj(404,{'error':'not found'})
     def do_PUT(self):
         global rotate_counter

@@ -70,6 +70,8 @@ jobs:
       - name: Verify Android entry points remain identical
         run: cmp utils/gotify-androidctl/gotify-androidctl utils/gotify-androidctl/gotify-androidctl.py
       - run: python -m unittest discover -s utils/gotify-androidctl/tests -p 'test_androidctl.py' -v
+      - name: Provision apps, authenticate notifications, rotate tokens, and validate assets
+        run: bash utils/gotify-androidctl/selftest.sh
 
   release-notes:
     name: Release-notes compatibility

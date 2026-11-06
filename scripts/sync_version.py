@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -42,9 +45,50 @@ def sync_version(version: str, root: Path, *, check_only: bool = False) -> None:
         if mismatched:
             raise ValueError("Version mismatch in " + ", ".join(mismatched))
         return
-    for path, content in updates.items():
-        if path.read_text(encoding="utf-8") != content:
-            path.write_text(content, encoding="utf-8")
+    # Stage changes and backups before touching any original file.
+    # Ordinary I/O failures are rolled back; sudden process termination
+    # cannot make a multi-file update fully atomic.
+    changed = {path: (path.read_text(encoding="utf-8"), content)
+               for path, content in updates.items()
+               if path.read_text(encoding="utf-8") != content}
+    stages: dict[Path, Path] = {}
+    backups: dict[Path, Path] = {}
+    installed: list[Path] = []
+
+    def stage(path: Path, data: str) -> Path:
+        fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+        temporary = Path(name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            shutil.copymode(path, temporary)
+            return temporary
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+
+    try:
+        for path, (original, updated) in changed.items():
+            stages[path] = stage(path, updated)
+            backups[path] = stage(path, original)
+        for path in changed:
+            os.replace(stages[path], path)
+            installed.append(path)
+    except OSError as exc:
+        rollback_errors: list[str] = []
+        for path in reversed(installed):
+            try:
+                os.replace(backups[path], path)
+            except OSError as rollback_error:
+                rollback_errors.append(f"{path}: {rollback_error}")
+        if rollback_errors:
+            raise RuntimeError("Version update rollback failed: " + "; ".join(rollback_errors)) from exc
+        raise
+    finally:
+        for temporary in (*stages.values(), *backups.values()):
+            temporary.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

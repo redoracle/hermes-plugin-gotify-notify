@@ -137,7 +137,7 @@ python scripts/sync_version.py --check
 python -m compileall -q gotify_notify tests scripts
 ```
 
-The tests mock HTTP and do not require live Gotify credentials. CI additionally runs the Android companion unit suite without connected devices; hardware-dependent provisioning tests are documented separately. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CI workflow](.github/workflows/ci.yml).
+The test suite combines mocked unit tests with a deterministic localhost HTTP contract server. No external Gotify credentials or Internet connectivity are required. CI also exercises Android companion unit tests and an isolated provisioning/token-rotation self-test against a local mock Gotify server; genuine hardware/OEM workflows remain separately gated. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CI workflow](.github/workflows/ci.yml).
 
 ## Project governance
 
