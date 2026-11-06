@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -74,3 +75,31 @@ def test_check_only_rejects_mismatch_without_editing(release_tree):
     with pytest.raises(ValueError, match="Version mismatch"):
         _module.sync_version("2.0.0", root, check_only=True)
     assert all((root / filename).read_text() == content for filename, content in originals.items())
+
+
+def test_replace_failure_rolls_back_every_version_declaration(release_tree):
+    root, originals = release_tree
+    actual_replace = _module.os.replace
+    calls = 0
+
+    def fail_second_replace(source, destination):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated filesystem failure")
+        return actual_replace(source, destination)
+
+    with mock.patch.object(_module.os, "replace", side_effect=fail_second_replace):
+        with pytest.raises(OSError, match="simulated filesystem failure"):
+            _module.sync_version("2.3.4", root)
+
+    assert all((root / name).read_text() == content for name, content in originals.items())
+    assert sorted(x.relative_to(root).as_posix() for x in root.rglob("*") if x.is_file()) == sorted(originals)
+
+
+def test_sync_preserves_existing_file_permissions(release_tree):
+    root, _ = release_tree
+    script = root / "gotify_notify/__init__.py"
+    script.chmod(0o600)
+    _module.sync_version("2.3.4", root)
+    assert script.stat().st_mode & 0o777 == 0o600
